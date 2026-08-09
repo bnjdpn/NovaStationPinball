@@ -1,0 +1,123 @@
+# frozen_string_literal: true
+
+require "rbconfig"
+
+def nova_media_run_id!
+  value = ENV["NOVA_MEDIA_RUN_ID"].to_s
+  UI.user_error!("NOVA_MEDIA_RUN_ID is required") unless value.match?(/\A[0-9A-Za-z][0-9A-Za-z._-]{0,79}\z/)
+  value
+end
+
+def nova_media_generation_arguments
+  locales = ENV.fetch("NOVA_MEDIA_LOCALES", "en-US,fr-FR").split(",").map(&:strip).reject(&:empty?)
+  execution_id = ENV["NOVA_MEDIA_EXECUTION_ID"].to_s
+  pool_config = ENV["NOVA_MEDIA_POOL_CONFIG"].to_s
+  UI.user_error!("NOVA_MEDIA_EXECUTION_ID is required") if execution_id.empty?
+  UI.user_error!("NOVA_MEDIA_POOL_CONFIG is required") if pool_config.empty?
+  leases = {
+    "iphone-17-pro-max" => ENV["NOVA_MEDIA_LEASE_IPHONE_17_PRO_MAX"],
+    "iphone-se-3" => ENV["NOVA_MEDIA_LEASE_IPHONE_SE_3"],
+    "ipad-pro-13-m5" => ENV["NOVA_MEDIA_LEASE_IPAD_PRO_13_M5"]
+  }
+  locales.flat_map { |locale| ["--locale", locale] } +
+    ["--execution-id", execution_id, "--pool-config", pool_config] +
+    leases.flat_map do |device, path|
+      UI.user_error!("Missing exact fixed-pool lease for #{device}") if path.to_s.empty?
+      ["--lease", "#{device}=#{path}"]
+    end
+end
+
+def nova_media_run_root(run_id)
+  File.expand_path("../Builds/AppStore/NovaStationPinball/#{run_id}", __dir__)
+end
+
+default_platform(:ios)
+skip_docs
+
+platform :ios do
+  lane :setup_asc do
+    UI.message("ASC setup is intentionally deferred to an explicit release task.")
+  end
+
+  lane :release_contract do
+    sh(RbConfig.ruby, File.expand_path("../scripts/release_contract.rb", __dir__))
+  end
+
+  lane :asc_status do
+    UI.message("ASC status is intentionally deferred to an explicit release task.")
+  end
+
+  lane :metadata do
+    release_contract
+    UI.message("Bilingual app-local metadata passed the release contract.")
+  end
+
+  lane :screenshots do
+    run_id = nova_media_run_id!
+    sh(
+      RbConfig.ruby,
+      File.expand_path("../scripts/app_store/generate_screenshots.rb", __dir__),
+      "--run-id", run_id,
+      *nova_media_generation_arguments
+    )
+  end
+
+  lane :app_previews do
+    run_id = nova_media_run_id!
+    sh(
+      RbConfig.ruby,
+      File.expand_path("../scripts/app_store/generate_app_previews.rb", __dir__),
+      "--run-id", run_id,
+      *nova_media_generation_arguments
+    )
+  end
+
+  lane :media_contract do
+    run_id = nova_media_run_id!
+    sh(
+      RbConfig.ruby,
+      File.expand_path("../scripts/app_store/media_contract.rb", __dir__),
+      "--run-root", nova_media_run_root(run_id)
+    )
+  end
+
+  lane :upload_screenshots do
+    media_contract
+    UI.message("Screenshot upload requires an explicit release task.")
+  end
+
+  lane :upload_previews do
+    media_contract
+    UI.message("Preview upload requires an explicit release task.")
+  end
+
+  lane :build_release do
+    UI.message("Signed builds require the portfolio release launcher.")
+  end
+
+  lane :upload_release do
+    UI.message("Release upload requires an explicit release task.")
+  end
+
+  lane :submit_review do
+    UI.message("Review submission requires an explicit release task.")
+  end
+
+  lane :release_quick do
+    release_contract
+    media_contract
+    UI.message("Release execution is intentionally deferred to the portfolio launcher.")
+  end
+
+  lane :pricing do
+    UI.message("Pricing remains free upfront; no ASC mutation is performed.")
+  end
+
+  lane :iap_status do
+    UI.message("IAP status is intentionally deferred to an explicit release task.")
+  end
+
+  lane :iap_sync do
+    UI.message("IAP synchronization requires an explicit release task.")
+  end
+end

@@ -1,0 +1,3 @@
+Bienvenue à bord de Nova Station.
+
+La version 1.0 comprend la table complète, la physique déterministe, les missions, neuf promotions d’habilitation, le multibille, le tilt, les records locaux, Game Center facultatif, les interfaces française et anglaise, ainsi que la prise en charge d’iPhone et d’iPad.

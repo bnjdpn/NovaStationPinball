@@ -1,0 +1,376 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "pathname"
+require "yaml"
+
+module NovaStationPinballReleaseContract
+  ROOT = File.expand_path("..", __dir__)
+  BUNDLE_ID = "com.bnjdpn.NovaStationPinball"
+  REQUIRED_LOCALES = %w[en-US fr-FR].freeze
+  REQUIRED_TIPS = %w[tip.cafe tip.merci tip.soutien].freeze
+  REQUIRED_LANES = %w[
+    setup_asc release_contract asc_status metadata screenshots app_previews media_contract upload_screenshots
+    upload_previews build_release upload_release submit_review release_quick pricing
+    iap_status iap_sync
+  ].freeze
+  FORMSPREE_ENDPOINT = "https://formspree.io/f/mykqbyyw"
+
+  class Verifier
+    def initialize(root = ROOT)
+      @root = root
+      @errors = []
+    end
+
+    def verify
+      validate_required_files
+      validate_project
+      validate_package
+      validate_bootstrap_sources
+      validate_release_config
+      validate_metadata
+      validate_privacy_manifest
+      validate_media_pipeline
+      validate_optional_services
+      validate_fastlane
+      validate_support_page
+      validate_ci
+      @errors
+    end
+
+    private
+
+    def validate_required_files
+      %w[
+        AGENTS.md .gitignore README.md project.yml Package.swift Gemfile
+        NovaStationPinball/Resources/PrivacyInfo.xcprivacy
+        NovaStationPinball/NovaStationPinball.entitlements
+        NovaStationPinball/App/NovaStationPinballApp.swift
+        NovaStationPinballTests/BootstrapTests.swift
+        NovaStationPinballUITests/BootstrapUITests.swift
+        NovaStationPinballUITests/StoreScreenshotUITests.swift
+        NovaStationPinballUITests/AppPreviewUITests.swift
+        NovaStationPinball/App/MediaScenario.swift
+        NovaStationPinball/App/MediaPreviewHandshake.swift
+        NovaStationCore/Sources/NovaStationCore/NovaStationCore.swift
+        NovaStationCore/Tests/NovaStationCoreTests/NovaStationCoreTests.swift
+        fastlane/Fastfile fastlane/Appfile fastlane/release_config.json
+        fastlane/metadata/en-US/support_url.txt
+        fastlane/metadata/fr-FR/support_url.txt
+        scripts/app_store/media_contract.rb
+        scripts/app_store/media_contract_test.rb
+        scripts/app_store/media_generation.rb
+        scripts/app_store/generate_screenshots.rb
+        scripts/app_store/generate_app_previews.rb
+        docs/index.html docs/privacy.html
+      ].each { |path| error("missing #{path}") unless File.file?(path(path)) }
+    end
+
+    def validate_project
+      project = YAML.safe_load(File.read(path("project.yml"), encoding: "UTF-8"), aliases: false)
+      target = project.fetch("targets").fetch("NovaStationPinball")
+      settings = target.fetch("settings").fetch("base")
+      info = target.fetch("info").fetch("properties")
+      error("bundle ID mismatch") unless settings["PRODUCT_BUNDLE_IDENTIFIER"] == BUNDLE_ID
+      error("iOS deployment target must be 17.0") unless target["deploymentTarget"] == "17.0"
+      error("Swift version must be 6.0") unless settings["SWIFT_VERSION"] == "6.0"
+      error("device families must be iPhone and iPad") unless settings["TARGETED_DEVICE_FAMILY"] == "1,2"
+      landscapes = %w[UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight]
+      error("iPhone orientation must be landscape") unless info["UISupportedInterfaceOrientations"] == landscapes
+      error("iPad orientation must be landscape") unless info["UISupportedInterfaceOrientations~ipad"] == landscapes
+      expected_targets = %w[NovaStationPinball NovaStationPinballTests NovaStationPinballUITests]
+      error("XcodeGen targets are incomplete") unless project.fetch("targets").keys.sort == expected_targets
+      error("app sources are incomplete") unless source_paths(target) == ["NovaStationPinball"]
+      error("unit test sources are incomplete") unless source_paths(project.fetch("targets").fetch("NovaStationPinballTests")) == ["NovaStationPinballTests"]
+      error("UI test sources are incomplete") unless source_paths(project.fetch("targets").fetch("NovaStationPinballUITests")) == ["NovaStationPinballUITests"]
+    rescue StandardError => exception
+      error("invalid project.yml: #{exception.message}")
+    end
+
+    def validate_package
+      package = File.read(path("Package.swift"), encoding: "UTF-8")
+      error("NovaStationCore product is missing") unless package.include?('.library(name: "NovaStationCore", targets: ["NovaStationCore"])')
+      error("NovaStationCore source target is missing") unless package.include?('.target(name: "NovaStationCore", path: "NovaStationCore/Sources/NovaStationCore")')
+      error("NovaStationCore test target is missing") unless package.include?('.testTarget(name: "NovaStationCoreTests", dependencies: ["NovaStationCore"], path: "NovaStationCore/Tests/NovaStationCoreTests")')
+    rescue Errno::ENOENT
+      error("missing Package.swift")
+    end
+
+    def validate_bootstrap_sources
+      app_source = File.read(path("NovaStationPinball/App/NovaStationPinballApp.swift"), encoding: "UTF-8")
+      error("app entry point is missing @main") unless app_source.include?("@main") && app_source.include?("struct NovaStationPinballApp: App")
+      unit_test = File.read(path("NovaStationPinballTests/BootstrapTests.swift"), encoding: "UTF-8")
+      error("unit test bootstrap is missing") unless unit_test.include?("XCTestCase")
+      ui_test = File.read(path("NovaStationPinballUITests/BootstrapUITests.swift"), encoding: "UTF-8")
+      error("UI test bootstrap is missing") unless ui_test.include?("XCUIApplication")
+      core_source = File.read(path("NovaStationCore/Sources/NovaStationCore/NovaStationCore.swift"), encoding: "UTF-8")
+      error("SwiftPM core source is missing") unless core_source.include?("public enum NovaStationCore")
+      core_test = File.read(path("NovaStationCore/Tests/NovaStationCoreTests/NovaStationCoreTests.swift"), encoding: "UTF-8")
+      error("SwiftPM core test is missing") unless core_test.include?("@testable import NovaStationCore")
+    rescue Errno::ENOENT => exception
+      error("missing bootstrap source: #{exception.message}")
+    end
+
+    def validate_release_config
+      config = JSON.parse(File.read(path("fastlane/release_config.json"), encoding: "UTF-8"))
+      error("release locales must be French and English") unless config["locales"].sort == REQUIRED_LOCALES
+      tips = config.fetch("tip_products").map { |tip| tip.fetch("id") }.sort
+      error("only the three optional tips are allowed") unless tips == REQUIRED_TIPS
+      error("support URL mismatch") unless config["support_url"] == "https://bnjdpn.github.io/NovaStationPinball/#contact"
+      expected_scenarios = %w[launch mission promotion multiball tilt game-over]
+      expected_preview_policy = {
+        "applicable" => true,
+        "review_each_release" => true,
+        "generator" => "scripts/app_store/generate_app_previews.rb",
+        "parallel_locales" => 2,
+        "scenarios" => expected_scenarios
+      }
+      error("App Preview policy mismatch") unless config["app_preview_policy"] == expected_preview_policy
+      media = config.fetch("media_contract")
+      error("media generator mismatch") unless media["generator"] == "scripts/app_store/generate_screenshots.rb"
+      error("media validator mismatch") unless media["validator"] == "scripts/app_store/media_contract.rb"
+      error("media generation must limit parallel locales to two") unless media["parallel_locales"] == 2
+      error("media devices mismatch") unless media["devices"] == %w[iphone-17-pro-max iphone-se-3 ipad-pro-13-m5]
+      error("media scenarios mismatch") unless media["scenarios"] == expected_scenarios
+    rescue StandardError => exception
+      error("invalid release config: #{exception.message}")
+    end
+
+    def validate_metadata
+      required = %w[
+        name.txt subtitle.txt description.txt keywords.txt promotional_text.txt
+        release_notes.txt support_url.txt privacy_url.txt marketing_url.txt
+      ]
+      REQUIRED_LOCALES.each do |locale|
+        required.each do |filename|
+          relative = "fastlane/metadata/#{locale}/#{filename}"
+          unless File.file?(path(relative))
+            error("missing #{relative}")
+            next
+          end
+          value = File.read(path(relative), encoding: "UTF-8").strip
+          error("empty #{relative}") if value.empty?
+          error("public identity reference in #{relative}") if value.match?(/Space Cadet|Windows|Microsoft/i)
+        end
+        validate_metadata_limit(locale, "name.txt", 30)
+        validate_metadata_limit(locale, "subtitle.txt", 30)
+        validate_metadata_limit(locale, "promotional_text.txt", 170)
+        keywords = File.read(path("fastlane/metadata/#{locale}/keywords.txt"), encoding: "UTF-8").strip
+        error("keywords exceed 100 bytes for #{locale}") if keywords.bytesize > 100
+        support = File.read(path("fastlane/metadata/#{locale}/support_url.txt"), encoding: "UTF-8").strip
+        privacy = File.read(path("fastlane/metadata/#{locale}/privacy_url.txt"), encoding: "UTF-8").strip
+        error("support URL mismatch for #{locale}") unless support == "https://bnjdpn.github.io/NovaStationPinball/#contact"
+        error("privacy URL mismatch for #{locale}") unless privacy == "https://bnjdpn.github.io/NovaStationPinball/privacy.html"
+      end
+      en_promo = File.read(path("fastlane/metadata/en-US/promotional_text.txt"), encoding: "UTF-8")
+      fr_promo = File.read(path("fastlane/metadata/fr-FR/promotional_text.txt"), encoding: "UTF-8")
+      error("English promotional text must truthfully advertise 17 original missions") unless en_promo.match?(/17 (?:original )?missions/i)
+      error("French promotional text must truthfully advertise 17 missions") unless fr_promo.match?(/17 missions/i)
+      error("promotional text must not claim six mission states") if "#{en_promo}\n#{fr_promo}".match?(/six mission states|six états de mission/i)
+    rescue Errno::ENOENT => exception
+      error("metadata validation failed: #{exception.message}")
+    end
+
+    def validate_privacy_manifest
+      privacy = File.read(path("NovaStationPinball/Resources/PrivacyInfo.xcprivacy"), encoding: "UTF-8")
+      unless privacy.match?(/<key>NSPrivacyAccessedAPIType<\/key>\s*<string>NSPrivacyAccessedAPICategoryUserDefaults<\/string>/)
+        error("privacy manifest must declare UserDefaults required-reason API category")
+      end
+      unless privacy.match?(/<key>NSPrivacyAccessedAPITypeReasons<\/key>\s*<array>\s*<string>CA92\.1<\/string>\s*<\/array>/)
+        error("privacy manifest must declare UserDefaults reason CA92.1")
+      end
+    rescue Errno::ENOENT
+      error("missing PrivacyInfo.xcprivacy")
+    end
+
+    def validate_metadata_limit(locale, filename, maximum)
+      value = File.read(path("fastlane/metadata/#{locale}/#{filename}"), encoding: "UTF-8").strip
+      error("#{filename} exceeds #{maximum} characters for #{locale}") if value.length > maximum
+    end
+
+    def validate_media_pipeline
+      scenario_source = File.read(path("NovaStationPinball/App/MediaScenario.swift"), encoding: "UTF-8")
+      scenarios = %w[launch mission promotion multiball tilt game-over]
+      scenarios.each { |scenario| error("missing media scenario #{scenario}") unless scenario_source.include?(%Q{"#{scenario}"}) }
+      error("media scenarios must not reference vector assets") if scenario_source.match?(/\.svg\b|\.pdf\b/i)
+
+      screenshot_tests = File.read(path("NovaStationPinballUITests/StoreScreenshotUITests.swift"), encoding: "UTF-8")
+      preview_tests = File.read(path("NovaStationPinballUITests/AppPreviewUITests.swift"), encoding: "UTF-8")
+      scenarios.each do |scenario|
+        error("screenshot scenario missing #{scenario}") unless screenshot_tests.include?(%Q{"#{scenario}"})
+        error("preview scenario missing #{scenario}") unless preview_tests.include?(%Q{"#{scenario}"})
+      end
+      error("screenshot tests must retain real XCTest attachments") unless screenshot_tests.include?("XCTAttachment(screenshot:")
+
+      generation = File.read(path("scripts/app_store/media_generation.rb"), encoding: "UTF-8")
+      error("media generation must cap locale batches at two") unless generation.include?("locales.each_slice(2)")
+      error("media generation must target exact simulator UDIDs") unless generation.include?("platform=iOS Simulator,id=")
+      error("media generation must require fixed-pool ownership locks") unless
+        generation.include?("simulator lease ownership changed") && generation.include?("lease path is not the fixed-pool lock")
+      error("media generation must require iOS 26.2 exact model descriptors") unless
+        generation.include?("com.apple.CoreSimulator.SimRuntime.iOS-26-2") &&
+          generation.include?("com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max") &&
+          generation.include?("com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation") &&
+          generation.include?("com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5")
+      if generation.match?(/simctl.*(?:create|delete)|shutdown all|erase all|\bbooted\b/i)
+        error("media generation must never select or mutate unowned simulators")
+      end
+      unless generation.include?("build-for-testing") && generation.include?("test-without-building") &&
+             generation.include?("XCTestRunConfigurator") &&
+             generation.include?("EnvironmentVariablesEnabled") &&
+             generation.include?("EnvironmentVariables") &&
+             generation.include?("NOVA_MEDIA_HANDSHAKE_TOKEN")
+        error("App Preview handshake token must be injected into an isolated xctestrun")
+      end
+      preview_generator = File.read(path("scripts/app_store/generate_app_previews.rb"), encoding: "UTF-8")
+      ready = preview_generator.index('wait_for!("ready")')
+      recording = preview_generator.index("recordVideo")
+      recorder_ready = preview_generator.rindex("wait_until_writing!")
+      recording_marker = preview_generator.index('write!("recording")')
+      started = preview_generator.index('wait_for!("started")')
+      complete = preview_generator.index('wait_for!("complete")')
+      stop = preview_generator.index('stop_owned_process!(record_pid, "INT")')
+      unless ready && recording && recorder_ready && recording_marker && started && complete && stop &&
+             ready < recording && recording < recorder_ready && recorder_ready < recording_marker &&
+             recording_marker < started && complete < stop
+        error("App Preview recording must be bounded by the ready/complete app handshake")
+      end
+      build = preview_generator.index("build_for_testing_arguments")
+      inject = preview_generator.index("find_and_inject!")
+      test = preview_generator.index("test_without_building_arguments")
+      unless build && inject && test && build < inject && inject < test
+        error("App Preview XCTest must build, inject its isolated xctestrun, then test without building")
+      end
+      if preview_generator.match?(/Process\.spawn\(\s*\{\s*"NOVA_MEDIA_HANDSHAKE_TOKEN"/m)
+        error("App Preview handshake token must not rely on a shell export around xcodebuild")
+      end
+      media_contract = File.read(path("scripts/app_store/media_contract.rb"), encoding: "UTF-8")
+      unless preview_generator.include?("CaptureTiming.trim_offset") &&
+             preview_generator.include?("capture_trim_offset: trim_offset") &&
+             media_contract.include?('"capture_trim_offset_seconds" => nil') &&
+             media_contract.include?("invalid capture trim offset")
+        error("App Preview measured trim offset must be persisted and validated")
+      end
+      %w[-profile:v -level:v -pix_fmt -b:v -minrate -maxrate -profile:a -b:a -ar -ac].each do |flag|
+        error("App Preview encoder missing #{flag}") unless preview_generator.include?(%Q{"#{flag}"})
+      end
+      error("App Preview encoder must produce progressive 30 fps H.264 CBR") unless
+        preview_generator.include?("fps=30,setfield=prog") && preview_generator.include?("nal-hrd=cbr")
+      preview_test = File.read(path("NovaStationPinballUITests/AppPreviewUITests.swift"), encoding: "UTF-8")
+      error("App Preview UI test must receive the app-local handshake token") unless preview_test.include?("NOVA_MEDIA_HANDSHAKE_TOKEN")
+      fastfile = File.read(path("fastlane/Fastfile"), encoding: "UTF-8")
+      %w[generate_screenshots.rb generate_app_previews.rb media_contract.rb].each do |script|
+        error("Fastlane media hook missing #{script}") unless fastfile.include?("scripts/app_store/#{script}")
+      end
+      %w[upload_screenshots upload_previews release_quick].each do |lane|
+        body = fastfile[/lane :#{lane}\b do\n(.*?)\n\s*end/m, 1]
+        error("#{lane} must gate media through media_contract") unless body&.include?("media_contract")
+      end
+    rescue Errno::ENOENT => exception
+      error("media pipeline validation failed: #{exception.message}")
+    end
+
+    def validate_fastlane
+      fastfile = File.read(path("fastlane/Fastfile"), encoding: "UTF-8")
+      REQUIRED_LANES.each { |lane| error("missing Fastlane lane #{lane}") unless fastfile.match?(/^\s*lane :#{Regexp.escape(lane)}\b/) }
+      error("Fastlane lane must invoke standalone contract") unless fastfile.include?("scripts/release_contract.rb")
+    rescue Errno::ENOENT
+      error("missing fastlane/Fastfile")
+    end
+
+    def validate_optional_services
+      storekit = JSON.parse(File.read(path("NovaStationPinball/StoreKit/NovaStationPinball.storekit"), encoding: "UTF-8"))
+      products = storekit.fetch("products")
+      expected_product_ids = REQUIRED_TIPS.map { |tip| "#{BUNDLE_ID}.#{tip}" }.sort
+      error("StoreKit configuration must contain exactly the three tips") unless products.map { |product| product.fetch("productID") }.sort == expected_product_ids
+      error("all tip products must be consumable") unless products.all? { |product| product["type"] == "Consumable" }
+      error("tip products must unlock no features") unless products.all? do |product|
+        product.fetch("localizations").all? do |localization|
+          localization.fetch("description").match?(/(?:Unlocks no features|ne débloque aucune fonctionnalité)/i)
+        end
+      end
+
+      project = YAML.safe_load(File.read(path("project.yml"), encoding: "UTF-8"), aliases: false)
+      app_sources = project.fetch("targets").fetch("NovaStationPinball").fetch("sources")
+      excluded = app_sources.flat_map { |source| source.fetch("excludes", []) }
+      error("StoreKit development configuration must be excluded from the app bundle") unless excluded.include?("StoreKit")
+      run_configuration = project.fetch("schemes").fetch("NovaStationPinball").fetch("run", {})
+      unless run_configuration["storeKitConfiguration"] == "NovaStationPinball/StoreKit/NovaStationPinball.storekit"
+        error("StoreKit development configuration must be attached to the run scheme")
+      end
+
+      %w[AudioEngine.swift HapticsService.swift GameCenterClient.swift TipJarSupport.swift].each do |filename|
+        source = File.read(path("NovaStationPinball/Services/#{filename}"), encoding: "UTF-8")
+        error("required network client in #{filename}") if source.match?(/\b(?:URLSession|NWConnection)\b/)
+      end
+      game_center = File.read(path("NovaStationPinball/Services/GameCenterClient.swift"), encoding: "UTF-8")
+      error("Game Center must provide a foreground-scene authentication presenter") unless
+        game_center.include?("presentAuthenticationController") && game_center.include?(".foregroundActive")
+      error("Game Center authentication presenter must not default to nil") if
+        game_center.match?(/presenter:\s*AuthenticationPresenter\?\s*=\s*nil/)
+
+      app_model = File.read(path("NovaStationPinball/App/AppModel.swift"), encoding: "UTF-8")
+      local_save = app_model.index("localGameStore.saveHighScores")
+      remote_submit = app_model.index("gameCenterClient.submit")
+      unless local_save && remote_submit && local_save < remote_submit
+        error("completed games must be saved locally before best-effort Game Center submission")
+      end
+      root_view = File.read(path("NovaStationPinball/App/RootView.swift"), encoding: "UTF-8")
+      error("optional services must start from the non-blocking app lifecycle") unless
+        root_view.include?(".task") && root_view.include?("model.start()") &&
+          app_model.include?("func start()") && app_model.include?("startOptionalServices()") &&
+          app_model.include?("lifecycleCoordinator.start()")
+
+      entitlements = File.read(path("NovaStationPinball/NovaStationPinball.entitlements"), encoding: "UTF-8")
+      unless entitlements.match?(/<key>com\.apple\.developer\.game-center<\/key>\s*<true\/>/)
+        error("Game Center entitlement must be enabled for the optional GameKit adapter")
+      end
+    rescue StandardError => exception
+      error("invalid optional services configuration: #{exception.message}")
+    end
+
+    def validate_support_page
+      page = File.read(path("docs/index.html"), encoding: "UTF-8")
+      error("support Formspree endpoint mismatch") unless page.include?(FORMSPREE_ENDPOINT)
+      error("support page must expose #contact") unless page.include?("id=\"contact\"")
+      public_contact_paths.each do |relative|
+        contents = File.read(path(relative), encoding: "UTF-8")
+        error("public mailto link in #{relative}") if contents.match?(/mailto:/i)
+        error("public email address in #{relative}") if contents.match?(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)
+      end
+    rescue Errno::ENOENT
+      error("missing docs/index.html")
+    end
+
+    def validate_ci
+      error("GitHub workflows are forbidden") if Dir.exist?(path(".github/workflows"))
+    end
+
+    def error(message)
+      @errors << message
+    end
+
+    def path(relative)
+      File.join(@root, relative)
+    end
+
+    def source_paths(target)
+      target.fetch("sources").map { |source| source.fetch("path") }
+    end
+
+    def public_contact_paths
+      %w[docs/index.html docs/privacy.html] + Dir.glob(path("fastlane/metadata/{en-US,fr-FR}/*")).map do |absolute|
+        Pathname.new(absolute).relative_path_from(Pathname.new(@root)).to_s
+      end
+    end
+  end
+end
+
+errors = NovaStationPinballReleaseContract::Verifier.new.verify
+if errors.empty?
+  puts "release_contract: OK"
+else
+  errors.each { |error| warn "release_contract: #{error}" }
+  exit 1
+end

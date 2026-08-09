@@ -1,0 +1,28 @@
+{
+  "app_name": "Nova Station Pinball",
+  "app_slug": "NovaStationPinball",
+  "bundle_id": "com.bnjdpn.NovaStationPinball",
+  "locales": ["en-US", "fr-FR"],
+  "support_url": "https://bnjdpn.github.io/NovaStationPinball/#contact",
+  "privacy_url": "https://bnjdpn.github.io/NovaStationPinball/privacy.html",
+  "price": "0.00",
+  "tip_products": [
+    { "id": "tip.cafe", "product_id": "com.bnjdpn.NovaStationPinball.tip.cafe", "type": "CONSUMABLE" },
+    { "id": "tip.merci", "product_id": "com.bnjdpn.NovaStationPinball.tip.merci", "type": "CONSUMABLE" },
+    { "id": "tip.soutien", "product_id": "com.bnjdpn.NovaStationPinball.tip.soutien", "type": "CONSUMABLE" }
+  ],
+  "app_preview_policy": {
+    "applicable": true,
+    "review_each_release": true,
+    "generator": "scripts/app_store/generate_app_previews.rb",
+    "parallel_locales": 2,
+    "scenarios": ["launch", "mission", "promotion", "multiball", "tilt", "game-over"]
+  },
+  "media_contract": {
+    "generator": "scripts/app_store/generate_screenshots.rb",
+    "validator": "scripts/app_store/media_contract.rb",
+    "parallel_locales": 2,
+    "devices": ["iphone-17-pro-max", "iphone-se-3", "ipad-pro-13-m5"],
+    "scenarios": ["launch", "mission", "promotion", "multiball", "tilt", "game-over"]
+  }
+}

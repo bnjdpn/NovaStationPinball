@@ -1,0 +1,176 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "accessibility.action.launch_ball" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Launch ball" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Lancer la bille" } }
+      }
+    },
+    "accessibility.action.left_flipper" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Toggle left flipper" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Basculer le flipper gauche" } }
+      }
+    },
+    "accessibility.action.nudge" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nudge table" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Secouer la table" } }
+      }
+    },
+    "accessibility.action.pause" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pause game" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mettre le jeu en pause" } }
+      }
+    },
+    "accessibility.action.resume" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Resume game" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Reprendre le jeu" } }
+      }
+    },
+    "accessibility.action.right_flipper" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Toggle right flipper" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Basculer le flipper droit" } }
+      }
+    },
+    "accessibility.console.label" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nova Station status console" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Console d’état Nova Station" } }
+      }
+    },
+    "accessibility.console.value" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Score %1$lld. Balls %2$lld. %3$@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Score %1$lld. Billes %2$lld. %3$@" } }
+      }
+    },
+    "accessibility.frame.hint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use the available actions to pause or resume the game." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Utilisez les actions disponibles pour mettre le jeu en pause ou le reprendre." } }
+      }
+    },
+    "accessibility.frame.label" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Complete Nova Station playfield" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Plateau complet de Nova Station" } }
+      }
+    },
+    "accessibility.table.hint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use the available actions for both flippers, launch, and nudge." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Utilisez les actions disponibles pour les deux flippers, le lancer et la secousse." } }
+      }
+    },
+    "accessibility.table.label" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nova Station pinball table" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Flipper Nova Station" } }
+      }
+    },
+    "app.name" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nova Station Pinball" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Flipper Nova Station" } }
+      }
+    },
+    "status.audio_interrupted" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AUDIO INTERRUPTED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "AUDIO INTERROMPU" } }
+      }
+    },
+    "status.ball_launched" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "BALL LAUNCHED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "BILLE LANCÉE" } }
+      }
+    },
+    "status.gesture_cancelled" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "GESTURE CANCELLED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "GESTE ANNULÉ" } }
+      }
+    },
+    "status.nudge" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "NUDGE" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "SECOUSSE" } }
+      }
+    },
+    "status.paused" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PAUSED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "EN PAUSE" } }
+      }
+    },
+    "status.plunger_charging" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PLUNGER CHARGING" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "LANCEUR EN CHARGE" } }
+      }
+    },
+    "status.restored" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "CHECKPOINT RESTORED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "PARTIE RESTAURÉE" } }
+      }
+    },
+    "clearance.cargoKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Cargo Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé cargo" } } } },
+    "clearance.commandKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Command Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé commandement" } } } },
+    "clearance.dockKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Dock Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé d’amarrage" } } } },
+    "clearance.ionKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Ion Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé ionique" } } } },
+    "clearance.novaKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Nova Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé nova" } } } },
+    "clearance.prismKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Prism Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé prisme" } } } },
+    "clearance.relayKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Relay Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé relais" } } } },
+    "clearance.shieldKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Shield Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé bouclier" } } } },
+    "clearance.transitKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Transit Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé transit" } } } },
+    "hud.balls" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "BALLS %1$lld · LIVE %2$lld" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "BILLES %1$lld · ACTIVES %2$lld" } } } },
+    "hud.clearance" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "CLEARANCE: %@" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "HABILITATION : %@" } } } },
+    "hud.clearance.none" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "CLEARANCE: NONE" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "HABILITATION : AUCUNE" } } } },
+    "hud.mission.active" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "MISSION: %@" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "MISSION : %@" } } } },
+    "hud.mission.completed" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "COMPLETE: %@" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "ACCOMPLIE : %@" } } } },
+    "hud.mission.failed" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "FAILED: %@" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "ÉCHEC : %@" } } } },
+    "hud.mission.idle" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "MISSION: STANDBY" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "MISSION : EN ATTENTE" } } } },
+    "hud.multipliers" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "SCORE ×%1$lld · BONUS ×%2$lld" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "SCORE ×%1$lld · BONUS ×%2$lld" } } } },
+    "hud.phase.game_over" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "GAME OVER · LAUNCH TO RESTART" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "PARTIE TERMINÉE · LANCEZ POUR REJOUER" } } } },
+    "hud.phase.launch" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "PULL AND RELEASE TO START" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "TIREZ ET RELÂCHEZ POUR JOUER" } } } },
+    "hud.score" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "SCORE %lld" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "SCORE %lld" } } } },
+    "hud.station_power" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "STATION POWER %lld%%" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "ÉNERGIE STATION %lld %%" } } } },
+    "hud.tilt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TILT · SYSTEM LOCKED" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "TILT · SYSTÈME BLOQUÉ" } } } },
+    "mission.auroraQuarantine" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Aurora Quarantine" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Quarantaine Aurora" } } } },
+    "mission.cargoDrift" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Cargo Drift" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Dérive cargo" } } } },
+    "mission.duskCourier" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Dusk Courier" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Courrier du crépuscule" } } } },
+    "mission.echoSpire" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Echo Spire" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Flèche écho" } } } },
+    "mission.harborEmber" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Harbor Ember" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Braise du port" } } } },
+    "mission.helixLatch" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Helix Latch" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Verrou hélice" } } } },
+    "mission.ionChoir" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Ion Choir" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chœur ionique" } } } },
+    "mission.lanternRoute" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Lantern Route" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Route des lanternes" } } } },
+    "mission.novaCrown" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Nova Crown" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Couronne nova" } } } },
+    "mission.orbitalWake" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Orbital Wake" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sillage orbital" } } } },
+    "mission.phaseTide" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Phase Tide" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marée de phase" } } } },
+    "mission.polarVane" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Polar Vane" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Girouette polaire" } } } },
+    "mission.prismSurvey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Prism Survey" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Étude prismatique" } } } },
+    "mission.relayBloom" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Relay Bloom" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Floraison relais" } } } },
+    "mission.riftContainment" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Rift Containment" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Confinement de faille" } } } },
+    "mission.stationTempest" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Station Tempest" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tempête de station" } } } },
+    "mission.vaultSignal" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Vault Signal" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Signal du coffre" } } } },
+    "status.game_over" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "GAME OVER" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "PARTIE TERMINÉE" } } } },
+    "status.mission" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "MISSION ACTIVE" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "MISSION ACTIVE" } } } },
+    "status.multiball" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "MULTIBALL" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "MULTIBILLE" } } } },
+    "status.promotion" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "CLEARANCE PROMOTED" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "HABILITATION PROMUE" } } } },
+    "status.tilt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TILT" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "TILT" } } } },
+    "status.system_ready" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "SYSTEM READY" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "SYSTÈME PRÊT" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

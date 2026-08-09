@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nova Station Pinball — Support</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; background: #11151a; color: #f5f2e8; line-height: 1.55; }
+      main { width: min(44rem, calc(100% - 2rem)); margin: 0 auto; padding: 3rem 0; }
+      section { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #707982; }
+      label { display: block; margin: 1rem 0; }
+      input, select, textarea, button { box-sizing: border-box; width: 100%; padding: .75rem; font: inherit; }
+      textarea { min-height: 9rem; }
+      button { width: auto; cursor: pointer; }
+      .honeypot { position: absolute; left: -10000px; }
+      a { color: #72e3da; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Nova Station Pinball</h1>
+      <p>Assistance en français et en anglais pour le jeu iPhone et iPad.</p>
+      <p lang="en">Support in English and French for the iPhone and iPad game.</p>
+      <p><a href="./privacy.html">Confidentialité / Privacy</a></p>
+      <section id="contact" aria-labelledby="contact-title">
+        <h2 id="contact-title">Nous contacter / Contact us</h2>
+        <p>Le formulaire est envoyé via Formspree. Aucun compte n’est nécessaire.</p>
+        <p lang="en">This form is sent through Formspree. No account is required.</p>
+        <form action="https://formspree.io/f/mykqbyyw" method="post">
+          <input type="hidden" name="app" value="Nova Station Pinball">
+          <input type="hidden" name="_subject" value="Nova Station Pinball support">
+          <label class="honeypot">Ne pas remplir / Leave empty <input type="text" name="_gotcha" tabindex="-1" autocomplete="off"></label>
+          <label>Catégorie / Category
+            <select name="category" required>
+              <option value="">Choisir / Choose</option>
+              <option value="gameplay">Jeu / Gameplay</option>
+              <option value="accessibility">Accessibilité / Accessibility</option>
+              <option value="purchase">Pourboire / Tip purchase</option>
+              <option value="other">Autre / Other</option>
+            </select>
+          </label>
+          <label>Adresse de réponse / Reply address <input type="email" name="email" autocomplete="email" required></label>
+          <label>Version de l’app / App version <input name="app_version"></label>
+          <label>Version du système / OS version <input name="os_version"></label>
+          <label>Message <textarea name="message" required></textarea></label>
+          <button type="submit">Envoyer / Send</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

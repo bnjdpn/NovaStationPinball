@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+DerivedData/
+Builds/
+*.xcuserstate
+xcuserdata/
+*.xcresult
+.swiftpm/
+.env
+*.p8
+fastlane/report.xml
+fastlane/test_output/

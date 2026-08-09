@@ -1,0 +1,2 @@
+app_identifier("com.bnjdpn.NovaStationPinball")
+apple_id(ENV["NOVA_STATION_PINBALL_APPLE_ID"]) if ENV["NOVA_STATION_PINBALL_APPLE_ID"]
