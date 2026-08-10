@@ -79,6 +79,22 @@ final class AppModelRuntimeIntegrationTests: XCTestCase {
         XCTAssertEqual(harness.model.scene.currentSnapshot.balls.count, 3)
     }
 
+    func testPreparedMediaScenarioReplacesTheDriverWithoutRebuildingTheSession() throws {
+        let harness = try RuntimeHarness(
+            mediaLaunchConfiguration: MediaLaunchConfiguration(
+                arguments: ["app", "-ui-testing", "-media-scenario", "game-over"]
+            )
+        )
+        defer { harness.cleanup() }
+        let preparedSession = try MediaScenario.gameOver.makeSession()
+
+        harness.model.applyMediaScenario(.gameOver, preparedSession: preparedSession)
+
+        XCTAssertEqual(harness.model.gamePhase, .gameOver)
+        XCTAssertEqual(harness.model.scene.currentPhase, .gameOver)
+        XCTAssertTrue(harness.model.scene.currentSnapshot.balls.isEmpty)
+    }
+
     func testTableGuidePausesAndResumesATableThatWasRunning() throws {
         let harness = try RuntimeHarness()
         defer { harness.cleanup() }

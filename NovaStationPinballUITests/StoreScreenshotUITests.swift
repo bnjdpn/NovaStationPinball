@@ -26,10 +26,28 @@ final class StoreScreenshotUITests: XCTestCase {
             XCTAssertTrue(app.otherElements["tableGuideStep.controls"].waitForExistence(timeout: 3))
             app.buttons["tableGuideNext"].tap()
             XCTAssertTrue(app.otherElements["tableGuideStep.missions"].waitForExistence(timeout: 3))
+            assertGuideCopyFitsAboveNavigation(in: app)
         }
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "screenshot-\(scenario)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    private func assertGuideCopyFitsAboveNavigation(in app: XCUIApplication) {
+        let title = app.staticTexts["tableGuideStepTitle"]
+        let body = app.staticTexts["tableGuideStepBody"]
+        let next = app.buttons["tableGuideNext"]
+
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        XCTAssertTrue(body.waitForExistence(timeout: 3))
+        XCTAssertTrue(next.waitForExistence(timeout: 3))
+        XCTAssertFalse(title.frame.isEmpty)
+        XCTAssertFalse(body.frame.isEmpty)
+        XCTAssertLessThanOrEqual(
+            body.frame.maxY,
+            next.frame.minY - 8,
+            "The complete mission guide copy must remain above the fixed navigation controls."
+        )
     }
 }

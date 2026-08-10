@@ -479,14 +479,49 @@ class VerifyImagegenAssetsTest < Minitest::Test
       "tableGuide",
       'tableGuideStep.\(step.identifier)',
       "tableGuideClose",
+      "tableGuideStepTitle",
+      "tableGuideStepBody",
       "tableGuidePrevious",
       "tableGuideNext",
-      "tableGuideDone"
+      "tableGuideDone",
+      "tableGuideNavigation"
     ], accessibility_identifiers
     assert_empty sprite_names & accessibility_identifiers,
                  "SpriteKit node names leak into XCUI and collide with SwiftUI accessibility overlays"
     assert sprite_names.all? { |name| name.start_with?("sprite.") },
            "visible SpriteKit node names must use the sprite.* namespace"
+  end
+
+  def test_table_guide_detail_card_keeps_localized_copy_above_navigation_on_phones
+    root_view = File.read(File.join(ROOT, "NovaStationPinball/App/RootView.swift"), encoding: "UTF-8")
+    screenshot_tests = File.read(
+      File.join(ROOT, "NovaStationPinballUITests/StoreScreenshotUITests.swift"),
+      encoding: "UTF-8"
+    )
+    preview_tests = File.read(
+      File.join(ROOT, "NovaStationPinballUITests/AppPreviewUITests.swift"),
+      encoding: "UTF-8"
+    )
+
+    assert_includes root_view, "detailCompactHeightThreshold: CGFloat = 500"
+    assert_includes root_view, "detailCompactWidthFraction: CGFloat = 0.47"
+    assert_includes root_view, "usesCompactDetailLayout ? .headline.bold() : .title3.bold()"
+    assert_includes root_view, 'accessibilityIdentifier("tableGuideStepTitle")'
+    assert_includes root_view, 'accessibilityIdentifier("tableGuideStepBody")'
+    assert_includes screenshot_tests, "assertGuideCopyFitsAboveNavigation(in: app)"
+    assert_includes screenshot_tests, "body.frame.maxY"
+    assert_includes screenshot_tests, "next.frame.minY - 8"
+    assert_includes preview_tests, "assertGuideCopyFitsAboveNavigation(in: app)"
+    assert_includes preview_tests, "app.descendants(matching: .any)"
+    assert_includes preview_tests, 'matching(identifier: "tableGuideNavigation")'
+    assert_includes preview_tests, "XCTAssertTrue(title.exists)"
+    assert_includes preview_tests, "XCTAssertTrue(body.exists)"
+    assert_includes preview_tests, "XCTAssertTrue(navigation.exists)"
+    refute_includes preview_tests, "title.waitForExistence"
+    refute_includes preview_tests, "body.waitForExistence"
+    refute_includes preview_tests, "navigation.waitForExistence"
+    assert_includes preview_tests, "body.frame.maxY"
+    assert_includes preview_tests, "navigation.frame.minY - 8"
   end
 
   def test_table_guide_controls_card_keeps_every_numbered_marker_visible

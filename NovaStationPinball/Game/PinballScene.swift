@@ -122,9 +122,17 @@ final class PinballScene: SKScene {
     }
 
     @discardableResult
-    func applyMediaScenario(_ scenario: MediaScenario) -> GameSessionFrame {
+    func applyMediaScenario(
+        _ scenario: MediaScenario,
+        preparedSession: GameSession? = nil
+    ) -> GameSessionFrame {
         do {
-            let session = try scenario.makeSession()
+            let session: GameSession
+            if let preparedSession {
+                session = preparedSession
+            } else {
+                session = try scenario.makeSession()
+            }
             driver.replaceSession(session)
             previousUpdateTime = nil
             let frame = driver.currentSessionFrame

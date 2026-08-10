@@ -51,6 +51,9 @@ final class LayoutUITests: XCTestCase {
         XCTAssertTrue(next.exists)
         next.tap()
         XCTAssertTrue(app.otherElements["tableGuideStep.missions"].waitForExistence(timeout: 3))
+        let missionBody = app.staticTexts["tableGuideStepBody"]
+        XCTAssertTrue(missionBody.waitForExistence(timeout: 3))
+        XCTAssertLessThanOrEqual(missionBody.frame.maxY, next.frame.minY - 8)
 
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "interactive-table-guide-missions"

@@ -69,4 +69,14 @@ final class MediaScenarioTests: XCTestCase {
         XCTAssertTrue(gameOver.snapshot.balls.isEmpty)
     }
 
+    func testPreviewSessionsArePreparedAsTheExactScenarioCatalog() throws {
+        let sessions = try MediaScenario.preparePreviewSessions()
+
+        XCTAssertEqual(Set(sessions.keys), Set(MediaScenario.allCases))
+        XCTAssertEqual(sessions[.launch]?.phase, .launch)
+        XCTAssertEqual(sessions[.mission]?.rules.missionState, .active(.orbitalWake))
+        XCTAssertEqual(sessions[.multiball]?.rules.ballsInPlay, 3)
+        XCTAssertEqual(sessions[.gameOver]?.phase, .gameOver)
+    }
+
 }

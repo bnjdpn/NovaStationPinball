@@ -107,11 +107,21 @@ class NovaStationMediaContractTest < Minitest::Test
     )
 
     assert_equal "/opt/homebrew/bin/ffmpeg", arguments.first
-    assert_equal "4.500", arguments.fetch(arguments.index("-ss") + 1)
+    assert_equal "5.000", arguments.fetch(arguments.index("-ss") + 1)
     assert_includes arguments, "scale=2868:1320:flags=lanczos"
     assert_includes arguments, "-map_metadata"
     assert_includes arguments, "-1"
     assert_equal "/run/mission.png", arguments.last
+
+    game_over_arguments = NovaStationPinballScreenshotGeneration::PreviewFrameExtraction.arguments(
+      source: "/run/preview.mov", destination: "/run/game-over.png",
+      width: 2_868, height: 1_320, scenario_index: 5
+    )
+    assert_equal "21.000", game_over_arguments.fetch(game_over_arguments.index("-ss") + 1)
+    assert_equal 21.0, NovaStationPinballMediaContract.screenshot_source_offset("game-over")
+    assert_raises(NovaStationPinballMediaContract::ContractError) do
+      NovaStationPinballMediaContract.screenshot_source_offset("unknown")
+    end
   end
 
   def test_generation_configuration_requires_three_exact_owned_pool_leases_and_at_most_two_locales
@@ -1068,6 +1078,20 @@ class NovaStationMediaContractTest < Minitest::Test
     end
   end
 
+  def test_strict_contract_rejects_the_legacy_half_second_game_over_frame
+    with_complete_run do |run_root, probe|
+      manifest = read_manifest(run_root)
+      game_over = manifest.fetch("cells").find { |cell| cell.fetch("scenario") == "game-over" }
+      game_over["screenshot_source_offset_seconds"] = 20.5
+      write_manifest(run_root, manifest)
+
+      error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+        contract(run_root, probe: probe).validate!
+      end
+      assert_includes error.message, "screenshot preview provenance mismatch"
+    end
+  end
+
   def test_strict_contract_requires_clockwise_raw_preview_provenance
     with_complete_run do |run_root, probe|
       manifest = read_manifest(run_root)
@@ -1478,7 +1502,7 @@ class NovaStationMediaContractTest < Minitest::Test
         cell["capture_trim_offset_seconds"] = 0.375
         cell["screenshot_source_preview_path"] = cell.fetch("preview_path")
         cell["screenshot_source_offset_seconds"] =
-          NovaStationPinballMediaContract::SCENARIOS.index(cell.fetch("scenario")) * 4.0 + 0.5
+          NovaStationPinballMediaContract.screenshot_source_offset(cell.fetch("scenario"))
         cell["screenshot_captured_at"] = "2026-07-22T10:30:01.000000Z"
         cell["screenshot_sha256"] = screenshot_hashes.fetch(screenshot)
         cell["preview_sha256"] = preview_hashes.fetch(preview)

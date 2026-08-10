@@ -456,6 +456,11 @@ private enum TableGuideLayoutContract {
     static let controlsHeightFraction: CGFloat = 0.60
     static let controlsMinimumWidth: CGFloat = 240
     static let controlsMinimumHeight: CGFloat = 180
+    static let detailCompactHeightThreshold: CGFloat = 500
+    static let detailCompactWidthFraction: CGFloat = 0.47
+    static let detailMaximumWidthFraction: CGFloat = 0.50
+    static let detailRegularWidthFraction: CGFloat = 0.29
+    static let detailMinimumWidth: CGFloat = 210
 }
 
 private struct TableGuideOverlay: View {
@@ -526,12 +531,14 @@ private struct TableGuideOverlay: View {
                 .foregroundStyle(.secondary)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: usesCompactDetailLayout ? 6 : 10) {
                     Text(step.title)
-                        .font(.title3.bold())
+                        .font(usesCompactDetailLayout ? .headline.bold() : .title3.bold())
+                        .accessibilityIdentifier("tableGuideStepTitle")
                     Text(step.body)
-                        .font(.body)
+                        .font(usesCompactDetailLayout ? .callout : .body)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("tableGuideStepBody")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -570,6 +577,7 @@ private struct TableGuideOverlay: View {
                         .accessibilityIdentifier("tableGuideDone")
                 }
             }
+            .accessibilityIdentifier("tableGuideNavigation")
         }
         .padding(14)
         .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
@@ -584,7 +592,7 @@ private struct TableGuideOverlay: View {
     private var cardWidth: CGFloat {
         switch step {
         case .controls:
-            min(
+            return min(
                 size.width - 2 * TableGuideLayoutContract.edgeInset,
                 max(
                     TableGuideLayoutContract.controlsMinimumWidth,
@@ -592,8 +600,21 @@ private struct TableGuideOverlay: View {
                 )
             )
         case .missions, .progress:
-            min(size.width * 0.38, max(210, size.width * 0.29))
+            let preferredFraction = usesCompactDetailLayout
+                ? TableGuideLayoutContract.detailCompactWidthFraction
+                : TableGuideLayoutContract.detailRegularWidthFraction
+            return min(
+                size.width * TableGuideLayoutContract.detailMaximumWidthFraction,
+                max(
+                    TableGuideLayoutContract.detailMinimumWidth,
+                    size.width * preferredFraction
+                )
+            )
         }
+    }
+
+    private var usesCompactDetailLayout: Bool {
+        step != .controls && size.height < TableGuideLayoutContract.detailCompactHeightThreshold
     }
 
     private var cardHeight: CGFloat {

@@ -47,6 +47,7 @@ module NovaStationPinballReleaseContract
         NovaStationPinball/Resources/PrivacyInfo.xcprivacy
         NovaStationPinball/NovaStationPinball.entitlements
         NovaStationPinball/App/NovaStationPinballApp.swift
+        NovaStationPinball/App/AppModel.swift
         NovaStationPinballTests/BootstrapTests.swift
         NovaStationPinballUITests/BootstrapUITests.swift
         NovaStationPinballUITests/StoreScreenshotUITests.swift
@@ -204,9 +205,29 @@ module NovaStationPinballReleaseContract
 
     def validate_media_pipeline
       scenario_source = File.read(path("NovaStationPinball/App/MediaScenario.swift"), encoding: "UTF-8")
+      app_model_source = File.read(path("NovaStationPinball/App/AppModel.swift"), encoding: "UTF-8")
       scenarios = %w[launch mission promotion multiball tilt game-over]
       scenarios.each { |scenario| error("missing media scenario #{scenario}") unless scenario_source.include?(%Q{"#{scenario}"}) }
       error("media scenarios must not reference vector assets") if scenario_source.match?(/\.svg\b|\.pdf\b/i)
+      unless scenario_source.include?("static func preparePreviewSessions()") &&
+             scenario_source.include?("allCases.map { scenario in")
+        error("App Preview sessions must be prepared as the exact scenario catalog")
+      end
+      prepare_marker = "let preparedSessions = try MediaScenario.preparePreviewSessions()"
+      ready_marker = "try handshake.prepareAndSignalReady()"
+      prepare_index = app_model_source.index(prepare_marker)
+      ready_index = app_model_source.index(ready_marker)
+      unless prepare_index && ready_index && prepare_index < ready_index
+        error("App Preview sessions must be prepared before the ready handshake")
+      end
+      loop_start = app_model_source.index("for (offset, scenario) in MediaScenario.allCases.dropFirst().enumerated()")
+      loop_end = app_model_source.index("try await clock.sleep(until: timelineStart.advanced(by: .seconds(24)))")
+      loop_source = loop_start && loop_end && loop_start < loop_end ? app_model_source[loop_start...loop_end] : ""
+      unless loop_source.include?("preparedSessions[scenario]") &&
+             loop_source.include?("applyMediaScenario(scenario, preparedSession: preparedSession)") &&
+             !loop_source.include?("makeSession()")
+        error("the timed App Preview loop must only swap prepared sessions")
+      end
 
       screenshot_tests = File.read(path("NovaStationPinballUITests/StoreScreenshotUITests.swift"), encoding: "UTF-8")
       preview_tests = File.read(path("NovaStationPinballUITests/AppPreviewUITests.swift"), encoding: "UTF-8")
@@ -215,6 +236,22 @@ module NovaStationPinballReleaseContract
         error("preview scenario missing #{scenario}") unless preview_tests.include?(%Q{"#{scenario}"})
       end
       error("screenshot tests must retain real XCTest attachments") unless screenshot_tests.include?("XCTAttachment(screenshot:")
+      unless screenshot_tests.include?("assertGuideCopyFitsAboveNavigation(in: app)") &&
+             screenshot_tests.include?("body.frame.maxY") &&
+             screenshot_tests.include?("next.frame.minY - 8") &&
+             preview_tests.include?("assertGuideCopyFitsAboveNavigation(in: app)") &&
+             preview_tests.include?("app.descendants(matching: .any)") &&
+             preview_tests.include?(%Q{matching(identifier: "tableGuideNavigation")}) &&
+             preview_tests.include?("XCTAssertTrue(title.exists)") &&
+             preview_tests.include?("XCTAssertTrue(body.exists)") &&
+             preview_tests.include?("XCTAssertTrue(navigation.exists)") &&
+             !preview_tests.include?("title.waitForExistence") &&
+             !preview_tests.include?("body.waitForExistence") &&
+             !preview_tests.include?("navigation.waitForExistence") &&
+             preview_tests.include?("body.frame.maxY") &&
+             preview_tests.include?("navigation.frame.minY - 8")
+        error("mission screenshot and preview tests must fail closed when localized guide copy reaches the fixed navigation")
+      end
 
       generation = File.read(path("scripts/app_store/media_generation.rb"), encoding: "UTF-8")
       error("media generation must cap locale batches at two") unless generation.include?("locales.each_slice(2)")

@@ -4,6 +4,10 @@ import Observation
 
 @Observable @MainActor
 final class AppModel {
+    private enum MediaPreviewSequenceError: Error {
+        case missingPreparedSession
+    }
+
     private enum GameStatus {
         case systemReady
         case plungerCharging
@@ -151,11 +155,11 @@ final class AppModel {
         lifecycleCoordinator.start()
     }
 
-    func applyMediaScenario(_ scenario: MediaScenario) {
+    func applyMediaScenario(_ scenario: MediaScenario, preparedSession: GameSession? = nil) {
         guard mediaLaunchConfiguration.scenario != nil else { return }
         mediaScenario = scenario
         gameCompletionGate.startNewGame()
-        let frame = scene.applyMediaScenario(scenario)
+        let frame = scene.applyMediaScenario(scenario, preparedSession: preparedSession)
         receive(sessionFrame: frame)
     }
 
@@ -164,6 +168,7 @@ final class AppModel {
               let token = mediaLaunchConfiguration.handshakeToken,
               let handshake = try? MediaPreviewHandshake(token: token) else { return }
         do {
+            let preparedSessions = try MediaScenario.preparePreviewSessions()
             try handshake.prepareAndSignalReady()
             try await handshake.waitForRecording()
             let clock = ContinuousClock()
@@ -171,7 +176,10 @@ final class AppModel {
             try handshake.signalStarted()
             for (offset, scenario) in MediaScenario.allCases.dropFirst().enumerated() {
                 try await clock.sleep(until: timelineStart.advanced(by: .seconds((offset + 1) * 4)))
-                applyMediaScenario(scenario)
+                guard let preparedSession = preparedSessions[scenario] else {
+                    throw MediaPreviewSequenceError.missingPreparedSession
+                }
+                applyMediaScenario(scenario, preparedSession: preparedSession)
             }
             try await clock.sleep(until: timelineStart.advanced(by: .seconds(24)))
             try handshake.signalComplete()

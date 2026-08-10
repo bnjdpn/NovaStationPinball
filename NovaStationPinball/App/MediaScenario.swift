@@ -1,7 +1,7 @@
 import Foundation
 import NovaStationCore
 
-enum MediaScenario: String, CaseIterable, Sendable {
+enum MediaScenario: String, CaseIterable, Hashable, Sendable {
     case launch = "launch"
     case mission = "mission"
     case promotion = "promotion"
@@ -10,6 +10,12 @@ enum MediaScenario: String, CaseIterable, Sendable {
     case gameOver = "game-over"
 
     static let previewSegmentDuration: TimeInterval = 4
+
+    static func preparePreviewSessions() throws -> [MediaScenario: GameSession] {
+        try Dictionary(uniqueKeysWithValues: allCases.map { scenario in
+            (scenario, try scenario.makeSession())
+        })
+    }
 
     /// Drives the same public production controls used by normal gameplay.
     func makeSession() throws -> GameSession {

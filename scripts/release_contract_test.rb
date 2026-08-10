@@ -286,16 +286,29 @@ class ReleaseContractTest < Minitest::Test
       scripts/app_store/generate_screenshots.rb
       scripts/app_store/generate_app_previews.rb
       NovaStationPinball/App/MediaScenario.swift
+      NovaStationPinball/App/AppModel.swift
       NovaStationPinballUITests/StoreScreenshotUITests.swift
       NovaStationPinballUITests/AppPreviewUITests.swift
     ]
     required.each { |relative| assert File.file?(File.join(ROOT, relative)), "missing #{relative}" }
 
     scenario_source = File.read(File.join(ROOT, "NovaStationPinball/App/MediaScenario.swift"), encoding: "UTF-8")
+    app_model_source = File.read(File.join(ROOT, "NovaStationPinball/App/AppModel.swift"), encoding: "UTF-8")
     %w[launch mission promotion multiball tilt game-over].each do |scenario|
       assert_includes scenario_source, "\"#{scenario}\""
     end
     refute_match(/\.svg\b|\.pdf\b/i, scenario_source)
+    assert_includes scenario_source, "static func preparePreviewSessions()"
+    assert_includes scenario_source, "allCases.map { scenario in"
+    prepare_marker = "let preparedSessions = try MediaScenario.preparePreviewSessions()"
+    ready_marker = "try handshake.prepareAndSignalReady()"
+    assert_operator app_model_source.index(prepare_marker), :<, app_model_source.index(ready_marker)
+    loop_start = app_model_source.index("for (offset, scenario) in MediaScenario.allCases.dropFirst().enumerated()")
+    loop_end = app_model_source.index("try await clock.sleep(until: timelineStart.advanced(by: .seconds(24)))")
+    loop_source = app_model_source[loop_start...loop_end]
+    assert_includes loop_source, "preparedSessions[scenario]"
+    assert_includes loop_source, "applyMediaScenario(scenario, preparedSession: preparedSession)"
+    refute_includes loop_source, "makeSession()"
     scene_source = File.read(File.join(ROOT, "NovaStationPinball/Game/PinballScene.swift"), encoding: "UTF-8")
     assert_includes scene_source, "private var didBuildRasterTable = false"
     refute_includes scene_source, "guard children.isEmpty else { return }"
@@ -307,6 +320,20 @@ class ReleaseContractTest < Minitest::Test
       assert_includes preview_tests, "\"#{scenario}\""
     end
     assert_includes screenshot_tests, "XCTAttachment(screenshot:"
+    assert_includes screenshot_tests, "assertGuideCopyFitsAboveNavigation(in: app)"
+    assert_includes screenshot_tests, "body.frame.maxY"
+    assert_includes screenshot_tests, "next.frame.minY - 8"
+    assert_includes preview_tests, "assertGuideCopyFitsAboveNavigation(in: app)"
+    assert_includes preview_tests, "app.descendants(matching: .any)"
+    assert_includes preview_tests, 'matching(identifier: "tableGuideNavigation")'
+    assert_includes preview_tests, "XCTAssertTrue(title.exists)"
+    assert_includes preview_tests, "XCTAssertTrue(body.exists)"
+    assert_includes preview_tests, "XCTAssertTrue(navigation.exists)"
+    refute_includes preview_tests, "title.waitForExistence"
+    refute_includes preview_tests, "body.waitForExistence"
+    refute_includes preview_tests, "navigation.waitForExistence"
+    assert_includes preview_tests, "body.frame.maxY"
+    assert_includes preview_tests, "navigation.frame.minY - 8"
 
     config = JSON.parse(File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8"))
     assert_equal(

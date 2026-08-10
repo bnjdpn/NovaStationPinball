@@ -9,8 +9,10 @@ require_relative "media_generation"
 module NovaStationPinballScreenshotGeneration
   class PreviewFrameExtraction
     def self.arguments(source:, destination:, width:, height:, scenario_index:)
+      scenario = NovaStationPinballMediaContract::SCENARIOS.fetch(scenario_index)
+      source_offset = NovaStationPinballMediaContract.screenshot_source_offset(scenario)
       [
-        "/opt/homebrew/bin/ffmpeg", "-y", "-ss", format("%.3f", scenario_index * 4.0 + 0.5),
+        "/opt/homebrew/bin/ffmpeg", "-y", "-ss", format("%.3f", source_offset),
         "-i", source, "-frames:v", "1", "-vf", "scale=#{width}:#{height}:flags=lanczos",
         "-map_metadata", "-1", "-update", "1", destination
       ]
@@ -57,7 +59,7 @@ module NovaStationPinballScreenshotGeneration
         NovaStationPinballMediaContract::PNGMetadata.strip_orientation!(destination)
         mark_artifact!(
           locale: locale, device: device, kind: :screenshot, path: destination,
-          screenshot_source_offset: index * 4.0 + 0.5
+          screenshot_source_offset: NovaStationPinballMediaContract.screenshot_source_offset(scenario)
         )
       end
     end

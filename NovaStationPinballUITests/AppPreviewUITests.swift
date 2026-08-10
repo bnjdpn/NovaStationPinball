@@ -57,6 +57,7 @@ final class AppPreviewUITests: XCTestCase {
                     app.otherElements["tableGuideStep.missions"].waitForExistence(timeout: 2),
                     "Mission media segment must show the interactive table guide"
                 )
+                assertGuideCopyFitsAboveNavigation(in: app)
             } else {
                 XCTAssertTrue(
                     app.buttons["tipJarOpen"].waitForExistence(timeout: 2),
@@ -65,6 +66,25 @@ final class AppPreviewUITests: XCTestCase {
             }
         }
         Thread.sleep(forTimeInterval: 4)
+    }
+
+    private func assertGuideCopyFitsAboveNavigation(in app: XCUIApplication) {
+        let title = app.staticTexts["tableGuideStepTitle"]
+        let body = app.staticTexts["tableGuideStepBody"]
+        let navigation = app.descendants(matching: .any)
+            .matching(identifier: "tableGuideNavigation")
+            .firstMatch
+
+        XCTAssertTrue(title.exists)
+        XCTAssertTrue(body.exists)
+        XCTAssertTrue(navigation.exists)
+        XCTAssertFalse(title.frame.isEmpty)
+        XCTAssertFalse(body.frame.isEmpty)
+        XCTAssertLessThanOrEqual(
+            body.frame.maxY,
+            navigation.frame.minY - 8,
+            "The complete mission guide copy must remain above the fixed navigation controls."
+        )
     }
 
     private func waitForSpringBoardToSettle() -> Bool {

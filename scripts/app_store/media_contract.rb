@@ -13,6 +13,7 @@ module NovaStationPinballMediaContract
   APP_SLUG = "NovaStationPinball"
   LOCALES = %w[en-US fr-FR].freeze
   SCENARIOS = %w[launch mission promotion multiball tilt game-over].freeze
+  SCREENSHOT_SEGMENT_SAMPLE_OFFSET_SECONDS = 1.0
   DEVICES = [
     { id: "iphone-17-pro-max", width: 2_868, height: 1_320, preview_width: 1_920, preview_height: 886, raw_transform: "transpose=clock" },
     { id: "iphone-se-3", width: 1_334, height: 750, preview_width: 1_334, preview_height: 750, raw_transform: "transpose=clock" },
@@ -24,6 +25,13 @@ module NovaStationPinballMediaContract
   SYSTEM_OVERLAY_REPORT_ROOT = "logs/system-overlay"
 
   class ContractError < StandardError; end
+
+  def self.screenshot_source_offset(scenario)
+    index = SCENARIOS.index(scenario)
+    raise ContractError, "unknown screenshot scenario: #{scenario}" unless index
+
+    index * 4.0 + SCREENSHOT_SEGMENT_SAMPLE_OFFSET_SECONDS
+  end
 
   class PNGMetadata
     class << self
@@ -662,7 +670,7 @@ module NovaStationPinballMediaContract
       error("screenshot dimensions mismatch: #{cell['screenshot_path']}") unless dimensions == device.values_at(:width, :height)
       orientation = PNGMetadata.orientation(path)
       error("screenshot orientation metadata must be absent or 1: #{cell['screenshot_path']}") unless orientation.nil? || orientation == 1
-      expected_offset = SCENARIOS.index(cell.fetch("scenario")) * 4.0 + 0.5
+      expected_offset = NovaStationPinballMediaContract.screenshot_source_offset(cell.fetch("scenario"))
       error("screenshot preview provenance mismatch: #{cell['screenshot_path']}") unless
         cell["screenshot_source_preview_path"] == cell["preview_path"] &&
         cell["screenshot_source_offset_seconds"] == expected_offset
