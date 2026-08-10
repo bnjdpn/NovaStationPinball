@@ -6,8 +6,12 @@ import SwiftUI
 struct RootView: View {
     let model: AppModel
     @Environment(\.scenePhase) private var scenePhase
-    @State private var tableGuideIsPresented = false
+    @State private var activeOverlay: RootOverlay?
     @State private var tableGuideStep = TableGuideStep.controls
+    @State private var tipJarLoadState = TipJarLoadState.idle
+    @State private var availableTips: [AvailableTip] = []
+    @State private var purchasingTipIdentifier: String?
+    @State private var tipPurchaseOutcome: TipPurchaseOutcome?
 
     var body: some View {
         ZStack {
@@ -24,40 +28,42 @@ struct RootView: View {
                 .frame(width: width, height: height)
                 .overlay {
                     ZStack {
-                        Rectangle().fill(.clear)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityIdentifier("art.frame.4x3")
-                            .accessibilityLabel(Text("accessibility.frame.label"))
-                            .accessibilityHint(Text("accessibility.frame.hint"))
-                            .accessibilityAction(named: Text(verbatim: model.accessibilityPauseActionTitle)) {
-                                model.togglePauseFromAccessibility()
+                        if activeOverlay == nil {
+                            Rectangle().fill(.clear)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityIdentifier("art.frame.4x3")
+                                .accessibilityLabel(Text("accessibility.frame.label"))
+                                .accessibilityHint(Text("accessibility.frame.hint"))
+                                .accessibilityAction(named: Text(verbatim: model.accessibilityPauseActionTitle)) {
+                                    model.togglePauseFromAccessibility()
+                                }
+                            HStack(spacing: 0) {
+                                Rectangle().fill(.clear)
+                                    .frame(width: width * 0.70, height: height)
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityIdentifier("art.table")
+                                    .accessibilityLabel(Text("accessibility.table.label"))
+                                    .accessibilityHint(Text("accessibility.table.hint"))
+                                    .accessibilityAction(named: Text("accessibility.action.left_flipper")) {
+                                        model.toggleFlipperFromAccessibility(.left)
+                                    }
+                                    .accessibilityAction(named: Text("accessibility.action.right_flipper")) {
+                                        model.toggleFlipperFromAccessibility(.right)
+                                    }
+                                    .accessibilityAction(named: Text("accessibility.action.launch_ball")) {
+                                        model.launchBallFromAccessibility()
+                                    }
+                                    .accessibilityAction(named: Text("accessibility.action.nudge")) {
+                                        model.nudgeFromAccessibility()
+                                    }
+                                Rectangle().fill(.clear)
+                                    .frame(width: width * 0.30, height: height)
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityIdentifier("art.console")
+                                    .accessibilityLabel(Text("accessibility.console.label"))
+                                    .accessibilityValue(model.accessibilityConsoleValue)
+                                    .accessibilityAddTraits(.updatesFrequently)
                             }
-                        HStack(spacing: 0) {
-                            Rectangle().fill(.clear)
-                                .frame(width: width * 0.70, height: height)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityIdentifier("art.table")
-                                .accessibilityLabel(Text("accessibility.table.label"))
-                                .accessibilityHint(Text("accessibility.table.hint"))
-                                .accessibilityAction(named: Text("accessibility.action.left_flipper")) {
-                                    model.toggleFlipperFromAccessibility(.left)
-                                }
-                                .accessibilityAction(named: Text("accessibility.action.right_flipper")) {
-                                    model.toggleFlipperFromAccessibility(.right)
-                                }
-                                .accessibilityAction(named: Text("accessibility.action.launch_ball")) {
-                                    model.launchBallFromAccessibility()
-                                }
-                                .accessibilityAction(named: Text("accessibility.action.nudge")) {
-                                    model.nudgeFromAccessibility()
-                                }
-                            Rectangle().fill(.clear)
-                                .frame(width: width * 0.30, height: height)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityIdentifier("art.console")
-                                .accessibilityLabel(Text("accessibility.console.label"))
-                                .accessibilityValue(model.accessibilityConsoleValue)
-                                .accessibilityAddTraits(.updatesFrequently)
                         }
                         if let mediaScenario = model.mediaScenario {
                             Rectangle().fill(.clear)
@@ -69,27 +75,54 @@ struct RootView: View {
                     }
                 }
                 .overlay(alignment: .topTrailing) {
-                    if !tableGuideIsPresented {
-                        Button {
-                            presentTableGuide()
-                        } label: {
-                            Label("guide.open", systemImage: "questionmark.circle.fill")
-                                .font(.headline)
+                    if activeOverlay == nil {
+                        HStack(spacing: 8) {
+                            Button {
+                                presentTipJar()
+                            } label: {
+                                Label("tips.open", systemImage: "heart.circle.fill")
+                                    .font(.headline)
+                            }
+                            .foregroundStyle(.mint)
+                            .accessibilityIdentifier("tipJarOpen")
+
+                            Button {
+                                presentTableGuide()
+                            } label: {
+                                Label("guide.open", systemImage: "questionmark.circle.fill")
+                                    .font(.headline)
+                            }
+                            .foregroundStyle(.cyan)
+                            .accessibilityIdentifier("tableGuideOpen")
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.black.opacity(0.84))
-                        .foregroundStyle(.cyan)
                         .padding(max(8, height * 0.02))
-                        .accessibilityIdentifier("tableGuideOpen")
                     }
                 }
                 .overlay {
-                    if tableGuideIsPresented {
+                    if activeOverlay == .tableGuide {
                         TableGuideOverlay(
                             size: CGSize(width: width, height: height),
                             step: $tableGuideStep,
                             onClose: dismissTableGuide
                         )
+                        .transition(.opacity)
+                    } else if activeOverlay == .tipJar {
+                        TipJarOverlay(
+                            size: CGSize(width: width, height: height),
+                            loadState: tipJarLoadState,
+                            tips: availableTips,
+                            purchasingTipIdentifier: purchasingTipIdentifier,
+                            purchaseOutcome: tipPurchaseOutcome,
+                            onPurchase: { tip in
+                                Task { await purchaseTip(tip) }
+                            },
+                            onClose: dismissTipJar
+                        )
+                        .task {
+                            await loadTipsIfNeeded()
+                        }
                         .transition(.opacity)
                     }
                 }
@@ -113,27 +146,68 @@ struct RootView: View {
     }
 
     private func presentTableGuide(step: TableGuideStep = .controls) {
-        guard !tableGuideIsPresented else { return }
-        model.beginTableGuide()
+        guard activeOverlay == nil else { return }
+        model.beginModalOverlay()
         tableGuideStep = step
         withAnimation(.easeOut(duration: 0.18)) {
-            tableGuideIsPresented = true
+            activeOverlay = .tableGuide
         }
     }
 
     private func dismissTableGuide() {
-        guard tableGuideIsPresented else { return }
+        guard activeOverlay == .tableGuide else { return }
         withAnimation(.easeIn(duration: 0.16)) {
-            tableGuideIsPresented = false
+            activeOverlay = nil
         }
-        model.endTableGuide()
+        model.endModalOverlay()
+    }
+
+    private func presentTipJar() {
+        guard activeOverlay == nil else { return }
+        availableTips = []
+        tipJarLoadState = .idle
+        tipPurchaseOutcome = nil
+        purchasingTipIdentifier = nil
+        model.beginModalOverlay()
+        withAnimation(.easeOut(duration: 0.18)) {
+            activeOverlay = .tipJar
+        }
+    }
+
+    private func dismissTipJar() {
+        guard activeOverlay == .tipJar else { return }
+        withAnimation(.easeIn(duration: 0.16)) {
+            activeOverlay = nil
+        }
+        model.endModalOverlay()
+    }
+
+    private func loadTipsIfNeeded() async {
+        guard tipJarLoadState == .idle else { return }
+        tipJarLoadState = .loading
+        let tips = await model.availableTips()
+        guard !Task.isCancelled else { return }
+        availableTips = tips
+        tipJarLoadState = tips.isEmpty ? .unavailable : .available
+    }
+
+    private func purchaseTip(_ tip: AvailableTip) async {
+        guard purchasingTipIdentifier == nil else { return }
+        purchasingTipIdentifier = tip.definition.productIdentifier
+        tipPurchaseOutcome = nil
+        let outcome = await model.purchaseTip(
+            productIdentifier: tip.definition.productIdentifier
+        )
+        guard !Task.isCancelled else { return }
+        tipPurchaseOutcome = outcome
+        purchasingTipIdentifier = nil
     }
 
     private func synchronizePreviewTableGuide(for scenario: MediaScenario?) {
         guard model.runsMediaPreviewSequence else { return }
         if scenario == .mission {
             presentTableGuide(step: .missions)
-        } else if tableGuideIsPresented {
+        } else if activeOverlay == .tableGuide {
             dismissTableGuide()
         }
     }
@@ -162,6 +236,154 @@ struct RootView: View {
             model.audioInterruptionEnded(shouldResume: options.contains(.shouldResume))
         @unknown default:
             model.audioInterruptionBegan()
+        }
+    }
+}
+
+private enum RootOverlay: Equatable {
+    case tableGuide
+    case tipJar
+}
+
+private enum TipJarLoadState: Equatable {
+    case idle
+    case loading
+    case available
+    case unavailable
+}
+
+private struct TipJarOverlay: View {
+    let size: CGSize
+    let loadState: TipJarLoadState
+    let tips: [AvailableTip]
+    let purchasingTipIdentifier: String?
+    let purchaseOutcome: TipPurchaseOutcome?
+    let onPurchase: (AvailableTip) -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            // Keep the game completely out of the visual and accessibility
+            // surface while this modal is open. A translucent scrim leaves
+            // inaccessible playfield copy visible to system audits.
+            Color.black
+                .contentShape(Rectangle())
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "heart.fill")
+                            .accessibilityHidden(true)
+                        Text("tips.title")
+                            .accessibilityIdentifier("tipJarTitle")
+                    }
+                    .font(.headline)
+                    Spacer(minLength: 8)
+                    Button(action: onClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                            .accessibilityHidden(true)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.mint)
+                    .accessibilityLabel(Text("tips.close"))
+                    .accessibilityIdentifier("tipJarClose")
+                }
+
+                Text("tips.body")
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("tipJarBody")
+
+                Divider()
+                    .overlay(.white.opacity(0.72))
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        switch loadState {
+                        case .idle, .loading:
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("tips.loading")
+                            }
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("tipJarStatus")
+                        case .unavailable:
+                            Text("tips.unavailable")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("tipJarStatus")
+                        case .available:
+                            ForEach(tips, id: \.definition.id) { tip in
+                                Button {
+                                    onPurchase(tip)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Text(verbatim: tip.displayName)
+                                            .multilineTextAlignment(.leading)
+                                        Spacer(minLength: 8)
+                                        Text(verbatim: tip.displayPrice)
+                                            .fontWeight(.semibold)
+                                            .monospacedDigit()
+                                    }
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(Color(red: 0.42, green: 1.0, blue: 0.78))
+                                .foregroundStyle(.black)
+                                .disabled(purchasingTipIdentifier != nil)
+                                .accessibilityLabel(
+                                    Text(verbatim: "\(tip.displayName), \(tip.displayPrice)")
+                                )
+                                .accessibilityHint(Text("tips.purchase.hint"))
+                                .accessibilityIdentifier("tipJarPurchase.\(tip.definition.id)")
+                            }
+                        }
+
+                        if let purchaseOutcome {
+                            Text(purchaseOutcome.localizedStatusKey)
+                                .font(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("tipJarStatus")
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(14)
+            .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
+            .background(
+                Color(red: 0.055, green: 0.065, blue: 0.085),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("tipJar")
+            .accessibilityLabel(Text("tips.title"))
+            .accessibilityAddTraits(.isModal)
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private var cardWidth: CGFloat {
+        min(size.width - 24, max(280, size.width * 0.56))
+    }
+
+    private var cardHeight: CGFloat {
+        min(size.height - 24, max(250, size.height * 0.88))
+    }
+}
+
+private extension TipPurchaseOutcome {
+    var localizedStatusKey: LocalizedStringKey {
+        switch self {
+        case .purchased: "tips.outcome.purchased"
+        case .pending: "tips.outcome.pending"
+        case .cancelled: "tips.outcome.cancelled"
+        case .unavailable: "tips.outcome.unavailable"
+        case .unverified: "tips.outcome.unverified"
         }
     }
 }
@@ -251,6 +473,7 @@ private struct TableGuideOverlay: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityIdentifier("tableGuide")
                 .accessibilityLabel(Text("guide.title"))
+                .accessibilityAddTraits(.isModal)
                 .allowsHitTesting(false)
 
             ForEach(Array(step.anchors.enumerated()), id: \.offset) { index, anchor in
@@ -289,6 +512,8 @@ private struct TableGuideOverlay: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title2)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.cyan)

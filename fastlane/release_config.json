@@ -52,8 +52,6 @@
     "status_script": "scripts/app_store/status.rb",
     "media_inputs": "fastlane/media_inputs.json",
     "media_expectations": "fastlane/media_expectations.json",
-    "media_adoption_contract": "fastlane/media_adoption_contract.json",
-    "media_adoption_lane": "adopt_media",
     "select_build_script": "scripts/app_store/select_build.rb",
     "metadata_readback_contract": "deliver-v1",
     "metadata_locales": ["en-US", "fr-FR"],

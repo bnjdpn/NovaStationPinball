@@ -57,6 +57,11 @@ final class AppPreviewUITests: XCTestCase {
                     app.otherElements["tableGuideStep.missions"].waitForExistence(timeout: 2),
                     "Mission media segment must show the interactive table guide"
                 )
+            } else {
+                XCTAssertTrue(
+                    app.buttons["tipJarOpen"].waitForExistence(timeout: 2),
+                    "Shipping tips access must remain visible in \(scenario) media"
+                )
             }
         }
         Thread.sleep(forTimeInterval: 4)

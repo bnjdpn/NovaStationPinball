@@ -45,7 +45,7 @@ final class LifecycleCoordinator {
     var allowsGameplayInput: Bool { allowsOptionalGameplayEffects }
     private var isStarted = false
     private(set) var isUserPaused = false
-    private(set) var isTableGuidePresented = false
+    private(set) var isModalOverlayPresented = false
     private var isAudioInterrupted = false
     private var appliedPauseState: Bool?
 
@@ -95,9 +95,9 @@ final class LifecycleCoordinator {
         reconcilePauseState()
     }
 
-    func setTableGuidePresented(_ presented: Bool) {
-        guard isTableGuidePresented != presented else { return }
-        isTableGuidePresented = presented
+    func setModalOverlayPresented(_ presented: Bool) {
+        guard isModalOverlayPresented != presented else { return }
+        isModalOverlayPresented = presented
         guard isStarted else { return }
         reconcilePauseState()
     }
@@ -121,7 +121,7 @@ final class LifecycleCoordinator {
 
     private func reconcilePauseState() {
         let shouldPause = applicationActivity != .active || isUserPaused ||
-            isTableGuidePresented || isAudioInterrupted
+            isModalOverlayPresented || isAudioInterrupted
         isSimulationPaused = shouldPause
         guard appliedPauseState != shouldPause else { return }
         appliedPauseState = shouldPause

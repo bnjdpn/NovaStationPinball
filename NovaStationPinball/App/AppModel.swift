@@ -83,7 +83,7 @@ final class AppModel {
         hapticsService: any PinballHapticsService = CoreHapticsService(),
         gameCenterClient: any GameCenterClient = GameKitGameCenterClient(),
         localGameStore: LocalGameStore = .applicationDefault(),
-        tipJarSupport: any TipJarSupport = StoreKitTipJarSupport(),
+        tipJarSupport: any TipJarSupport = TipJarSupportFactory.applicationDefault(),
         mediaLaunchConfiguration: MediaLaunchConfiguration = .current
     ) {
         self.audioEngine = audioEngine
@@ -216,14 +216,14 @@ final class AppModel {
         lifecycleCoordinator.setUserPaused(!lifecycleCoordinator.isSimulationPaused)
     }
 
-    func beginTableGuide() {
-        lifecycleCoordinator.setTableGuidePresented(true)
-        scene.setTableGuidePresented(true)
+    func beginModalOverlay() {
+        lifecycleCoordinator.setModalOverlayPresented(true)
+        scene.setModalOverlayPresented(true)
     }
 
-    func endTableGuide() {
-        scene.setTableGuidePresented(false)
-        lifecycleCoordinator.setTableGuidePresented(false)
+    func endModalOverlay() {
+        scene.setModalOverlayPresented(false)
+        lifecycleCoordinator.setModalOverlayPresented(false)
     }
 
     func toggleFlipperFromAccessibility(_ side: FlipperSide) {

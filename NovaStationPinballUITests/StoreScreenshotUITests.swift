@@ -18,6 +18,7 @@ final class StoreScreenshotUITests: XCTestCase {
 
         XCTAssertTrue(app.otherElements["art.frame.4x3"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.otherElements["media.scenario.\(scenario)"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["tipJarOpen"].waitForExistence(timeout: 3))
         if opensTableGuide {
             let open = app.buttons["tableGuideOpen"]
             XCTAssertTrue(open.waitForExistence(timeout: 3))

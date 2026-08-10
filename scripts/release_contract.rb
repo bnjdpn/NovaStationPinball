@@ -51,6 +51,7 @@ module NovaStationPinballReleaseContract
         NovaStationPinballUITests/BootstrapUITests.swift
         NovaStationPinballUITests/StoreScreenshotUITests.swift
         NovaStationPinballUITests/AppPreviewUITests.swift
+        NovaStationPinballUITests/TipJarReviewUITests.swift
         NovaStationPinball/App/MediaScenario.swift
         NovaStationPinball/App/MediaPreviewHandshake.swift
         NovaStationCore/Sources/NovaStationCore/NovaStationCore.swift
@@ -401,6 +402,98 @@ module NovaStationPinballReleaseContract
         root_view.include?(".task") && root_view.include?("model.start()") &&
           app_model.include?("func start()") && app_model.include?("startOptionalServices()") &&
           app_model.include?("lifecycleCoordinator.start()")
+
+      tip_identifiers = %w[tipJarOpen tipJar tipJarClose tipJarStatus]
+      tip_identifiers.each do |identifier|
+        error("tip UI is missing stable identifier #{identifier}") unless
+          root_view.include?(%Q{"#{identifier}"})
+      end
+      unless root_view.include?('"tipJarPurchase.\(tip.definition.id)"')
+        error("tip UI must derive stable purchase identifiers from the exact tip catalog")
+      end
+      unless root_view.include?("model.availableTips()") &&
+             root_view.match?(/model\.purchaseTip\(\s*productIdentifier:/m) &&
+             root_view.include?("tip.displayName") &&
+             root_view.include?("tip.displayPrice")
+        error("tip UI must load StoreKit names and prices only after explicit access")
+      end
+      if root_view.match?(/(?:USD|EUR|\$\s*\d|\d+[.,]\d{2}\s*€)/)
+        error("tip UI must not hard-code prices or currencies")
+      end
+      tip_support = File.read(path("NovaStationPinball/Services/TipJarSupport.swift"), encoding: "UTF-8")
+      unless tip_support.include?("displayName: product.displayName") &&
+             tip_support.include?("displayPrice: product.displayPrice") &&
+             app_model.include?("TipJarSupportFactory.applicationDefault()")
+        error("shipping tip names and prices must come from StoreKit.Product")
+      end
+      unless tip_support.match?(/#if DEBUG.*?NOVA_TIP_JAR_FIXTURE.*?#endif/m) &&
+             tip_support.match?(/#if DEBUG.*?actor UITestingTipJarSupport.*?#endif/m) &&
+             tip_support.include?('arguments.contains("-ui-testing")') &&
+             tip_support.include?('environment["NOVA_TIP_JAR_FIXTURE"] == "available"') &&
+             tip_support.include?("return StoreKitTipJarSupport()")
+        error("tip UI fixture must be DEBUG-only, double-gated, and default to StoreKit")
+      end
+      unless tip_support.include?("Transaction.unfinished") &&
+             tip_support.include?("Transaction.updates") &&
+             tip_support.include?("knownProductIdentifiers.contains(transaction.productIdentifier)") &&
+             tip_support.include?("await transaction.finish()")
+        error("shipping tip support must finish verified catalog transactions delivered after a pending purchase")
+      end
+      products.each do |product|
+        localizations = product.fetch("localizations")
+        english_name = localizations.find { |entry| entry["locale"] == "en_US" }.fetch("displayName")
+        french_name = localizations.find { |entry| entry["locale"] == "fr_FR" }.fetch("displayName")
+        price = product.fetch("displayPrice")
+        french_price = price.tr(".", ",")
+        unless tip_support.include?(%Q{displayName: french ? "#{french_name}" : "#{english_name}"}) &&
+               tip_support.include?(%Q{displayPrice: french ? "#{french_price} €" : "$#{price}"})
+          error("tip UI fixture must mirror the StoreKit name and price for #{product.fetch("productID")}")
+        end
+      end
+      ui_tests = File.read(path("NovaStationPinballUITests/LayoutUITests.swift"), encoding: "UTF-8")
+      tip_identifiers.each do |identifier|
+        error("tip UI test is missing #{identifier}") unless ui_tests.include?(identifier)
+      end
+      %w[tip.cafe tip.merci tip.soutien].each do |tip_id|
+        error("tip UI test is missing resolved purchase identifier #{tip_id}") unless
+          ui_tests.include?(%Q{"#{tip_id}"})
+      end
+      unless ui_tests.include?('app.buttons["tipJarPurchase.\(identifier)"]')
+        error("tip UI test must resolve each exact tip through the dynamic purchase identifier")
+      end
+      unless ui_tests.include?('launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"') &&
+             ui_tests.include?("-ui-testing")
+        error("tip UI test must explicitly activate both fixture gates")
+      end
+      screenshot_tests = File.read(path("NovaStationPinballUITests/StoreScreenshotUITests.swift"), encoding: "UTF-8")
+      preview_tests = File.read(path("NovaStationPinballUITests/AppPreviewUITests.swift"), encoding: "UTF-8")
+      unless screenshot_tests.include?("tipJarOpen") && preview_tests.include?("tipJarOpen")
+        error("shipping media tests must prove visible tip access")
+      end
+      if screenshot_tests.include?("NOVA_TIP_JAR_FIXTURE") || preview_tests.include?("NOVA_TIP_JAR_FIXTURE")
+        error("shipping media must never use the UI-test tip fixture")
+      end
+      review_test = File.read(path("NovaStationPinballUITests/TipJarReviewUITests.swift"), encoding: "UTF-8")
+      xcode_project = File.read(path("NovaStationPinball.xcodeproj/project.pbxproj"), encoding: "UTF-8")
+      unless review_test.include?('launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"') &&
+             review_test.include?("XCUIScreen.main.screenshot()") &&
+             review_test.include?("screenshot.image.cgImage") &&
+             review_test.include?("[2064, 2752]") &&
+             review_test.include?("fixture DEBUG") &&
+             !review_test.include?("purchaseButton.tap()") &&
+             xcode_project.include?("TipJarReviewUITests.swift in Sources")
+        error("IAP review capture must be compiled, fixture-labelled, full-screen, pixel-validated at 2752x2064, and non-purchasing")
+      end
+      background_is_conditional = root_view.match?(
+        /if activeOverlay == nil \{\s+Rectangle\(\)\.fill\(\.clear\).*?"art\.frame\.4x3".*?HStack\(spacing: 0\).*?"art\.table".*?"art\.console"/m
+      )
+      unless background_is_conditional &&
+             root_view.scan(".accessibilityAddTraits(.isModal)").length >= 2 &&
+             root_view.include?(".frame(width: 44, height: 44)") &&
+             ui_tests.include?('app.otherElements["art.frame.4x3"].exists') &&
+             ui_tests.include?('app.buttons["tipJarClose"].frame.width')
+        error("tip modal must hide background accessibility and expose a tested 44pt close target")
+      end
 
       entitlements = File.read(path("NovaStationPinball/NovaStationPinball.entitlements"), encoding: "UTF-8")
       unless entitlements.match?(/<key>com\.apple\.developer\.game-center<\/key>\s*<true\/>/)

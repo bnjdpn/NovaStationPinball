@@ -25,8 +25,122 @@ final class TipJarSupportTests: XCTestCase {
         XCTAssertEqual(outcome, .unavailable)
     }
 
+    @MainActor
+    func testExplicitTipAccessUsesStoreKitNamesAndPricesWithoutChangingGameplay() async {
+        let tips = [
+            AvailableTip(
+                definition: TipJarCatalog.tips[0],
+                displayName: "Coffee",
+                displayPrice: "$0.99"
+            ),
+            AvailableTip(
+                definition: TipJarCatalog.tips[1],
+                displayName: "Big thanks",
+                displayPrice: "$2.99"
+            ),
+            AvailableTip(
+                definition: TipJarCatalog.tips[2],
+                displayName: "Strong support",
+                displayPrice: "$5.99"
+            )
+        ]
+        let tipJar = RecordingTipJarSupport(
+            available: tips,
+            purchaseOutcome: .purchased
+        )
+        let model = AppModel(
+            audioEngine: NullAudioEngine(),
+            hapticsService: NullHapticsService(),
+            gameCenterClient: NullGameCenterClient(),
+            tipJarSupport: tipJar
+        )
+        let gameplayBeforePurchase = model.rulesState
+        let loadedTips = await model.availableTips()
+        let purchaseOutcome = await model.purchaseTip(
+            productIdentifier: TipJarCatalog.tips[1].productIdentifier
+        )
+        let requestedProductIdentifiers = await tipJar.requestedProductIdentifiers
+
+        XCTAssertEqual(loadedTips, tips)
+        XCTAssertEqual(purchaseOutcome, .purchased)
+        XCTAssertEqual(model.rulesState, gameplayBeforePurchase)
+        XCTAssertEqual(
+            requestedProductIdentifiers,
+            [TipJarCatalog.tips[1].productIdentifier]
+        )
+    }
+
+#if DEBUG
+    func testUITestingFixtureRequiresBothDebugRuntimeGates() async {
+        let noArgument = TipJarSupportFactory.applicationDefault(
+            arguments: [],
+            environment: ["NOVA_TIP_JAR_FIXTURE": "available"]
+        )
+        let noEnvironment = TipJarSupportFactory.applicationDefault(
+            arguments: ["-ui-testing"],
+            environment: [:]
+        )
+        XCTAssertTrue(noArgument is StoreKitTipJarSupport)
+        XCTAssertTrue(noEnvironment is StoreKitTipJarSupport)
+
+        let fixture = TipJarSupportFactory.applicationDefault(
+            arguments: ["-ui-testing"],
+            environment: ["NOVA_TIP_JAR_FIXTURE": "available"],
+            preferredLanguages: ["en"]
+        )
+        XCTAssertTrue(fixture is UITestingTipJarSupport)
+        let fixtureTips = await fixture.availableTips()
+        XCTAssertEqual(
+            fixtureTips,
+            [
+                AvailableTip(
+                    definition: TipJarCatalog.tips[0],
+                    displayName: "Coffee",
+                    displayPrice: "$0.99"
+                ),
+                AvailableTip(
+                    definition: TipJarCatalog.tips[1],
+                    displayName: "Big thanks",
+                    displayPrice: "$2.99"
+                ),
+                AvailableTip(
+                    definition: TipJarCatalog.tips[2],
+                    displayName: "Strong support",
+                    displayPrice: "$5.99"
+                )
+            ]
+        )
+    }
+#endif
+
     func testStoreKitConfigurationIsAbsentFromRuntimeBundle() {
         XCTAssertNil(Bundle.main.url(forResource: "NovaStationPinball", withExtension: "storekit"))
+    }
+
+    func testDelayedApprovalFinishesOnlyVerifiedCatalogTransactionUpdate() async {
+        let updates = AsyncStream<any TipTransactionFinishing>.makeStream()
+        let approvedTip = RecordingTipTransaction(
+            productIdentifier: TipJarCatalog.tips[0].productIdentifier
+        )
+        let unrelatedPurchase = RecordingTipTransaction(
+            productIdentifier: "com.bnjdpn.NovaStationPinball.not-a-tip"
+        )
+        let support = StoreKitTipJarSupport(transactionUpdates: { updates.stream })
+
+        updates.continuation.yield(unrelatedPurchase)
+        updates.continuation.yield(approvedTip)
+
+        for _ in 0..<100 {
+            if await approvedTip.finishCount == 1 { break }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        updates.continuation.finish()
+
+        let approvedFinishCount = await approvedTip.finishCount
+        let unrelatedFinishCount = await unrelatedPurchase.finishCount
+        XCTAssertEqual(approvedFinishCount, 1)
+        XCTAssertEqual(unrelatedFinishCount, 0)
+        withExtendedLifetime(support) {}
     }
 
     @MainActor
@@ -49,6 +163,19 @@ final class TipJarSupportTests: XCTestCase {
     }
 }
 
+private actor RecordingTipTransaction: TipTransactionFinishing {
+    nonisolated let productIdentifier: String
+    private(set) var finishCount = 0
+
+    init(productIdentifier: String) {
+        self.productIdentifier = productIdentifier
+    }
+
+    func finish() async {
+        finishCount += 1
+    }
+}
+
 @MainActor
 private final class RecordingGameCenterClient: GameCenterClient {
     private(set) var callCount = 0
@@ -61,14 +188,26 @@ private final class RecordingGameCenterClient: GameCenterClient {
 
 private actor RecordingTipJarSupport: TipJarSupport {
     private(set) var callCount = 0
+    private(set) var requestedProductIdentifiers: [String] = []
+    private let available: [AvailableTip]
+    private let purchaseOutcome: TipPurchaseOutcome
+
+    init(
+        available: [AvailableTip] = [],
+        purchaseOutcome: TipPurchaseOutcome = .unavailable
+    ) {
+        self.available = available
+        self.purchaseOutcome = purchaseOutcome
+    }
 
     func availableTips() async -> [AvailableTip] {
         callCount += 1
-        return []
+        return available
     }
 
     func purchase(productIdentifier: String) async -> TipPurchaseOutcome {
         callCount += 1
-        return .unavailable
+        requestedProductIdentifiers.append(productIdentifier)
+        return purchaseOutcome
     }
 }

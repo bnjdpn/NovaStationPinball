@@ -44,10 +44,14 @@ module NovaStationFinalValidation
   class PoolLeaseSession
     attr_reader :lease_paths, :udids
 
-    def initialize(pool_config_path:, app:, execution_id:, token_factory: -> { SecureRandom.hex(16) }, now: -> { Time.now.utc })
+    def initialize(
+      pool_config_path:, app:, execution_id:, media_ids: REQUIRED_DEVICES.keys,
+      token_factory: -> { SecureRandom.hex(16) }, now: -> { Time.now.utc }
+    )
       @pool_config_path = File.expand_path(pool_config_path.to_s)
       @app = app
       @execution_id = execution_id
+      @media_ids = media_ids
       @token_factory = token_factory
       @now = now
       @documents = {}
@@ -55,6 +59,7 @@ module NovaStationFinalValidation
       @udids = {}
       @acquired = false
       validate_identifiers!
+      validate_media_ids!
       load_pool!
     end
 
@@ -93,6 +98,14 @@ module NovaStationFinalValidation
       end
     end
 
+    def validate_media_ids!
+      unless @media_ids.is_a?(Array) && !@media_ids.empty? &&
+             @media_ids.all? { |media_id| media_id.is_a?(String) && REQUIRED_DEVICES.key?(media_id) } &&
+             @media_ids.uniq == @media_ids
+        raise ArgumentError, "media device selection is invalid"
+      end
+    end
+
     def load_pool!
       unless File.file?(@pool_config_path) && !File.symlink?(@pool_config_path)
         raise ArgumentError, "simulator pool config must be a regular non-symlink file"
@@ -107,7 +120,8 @@ module NovaStationFinalValidation
       unless Dir.exist?(@lock_root) && !File.symlink?(@lock_root)
         raise ArgumentError, "simulator lock root must be an existing non-symlink directory"
       end
-      @devices = REQUIRED_DEVICES.to_h do |media_id, (id, role, device_type)|
+      @devices = @media_ids.to_h do |media_id|
+        id, role, device_type = REQUIRED_DEVICES.fetch(media_id)
         matches = pool.fetch("devices").select { |candidate| candidate["media_id"] == media_id }
         device = matches.one? ? matches.first : nil
         unless device && device["id"] == id && device["role"] == role &&
@@ -117,7 +131,7 @@ module NovaStationFinalValidation
         end
         [media_id, device.freeze]
       end.freeze
-      unless @devices.values.map { |device| device.fetch("udid").upcase }.uniq.length == REQUIRED_DEVICES.length
+      unless @devices.values.map { |device| device.fetch("udid").upcase }.uniq.length == @devices.length
         raise ArgumentError, "pool devices must have distinct UDIDs"
       end
     rescue JSON::ParserError => error
@@ -184,17 +198,20 @@ module NovaStationFinalValidation
       options = {
         pool_config_path: "/private/tmp/apps-factory/simulator-pool.json",
         app: "nova-station-pinball",
-        hold_until_signal: false
+        hold_until_signal: false,
+        media_ids: []
       }
       OptionParser.new do |flags|
-        flags.banner = "Usage: final_validation_pool.rb --execution-id ID [--pool-config PATH]"
+        flags.banner = "Usage: final_validation_pool.rb --execution-id ID [--pool-config PATH] [--device MEDIA_ID]"
         flags.on("--execution-id ID") { |value| options[:execution_id] = value }
         flags.on("--pool-config PATH") { |value| options[:pool_config_path] = value }
+        flags.on("--device MEDIA_ID") { |value| options[:media_ids] << value }
         flags.on("--hold-until-signal") { options[:hold_until_signal] = true }
       end.parse!(argv)
       raise OptionParser::MissingArgument, "--execution-id" if options[:execution_id].to_s.empty?
 
       signal_only = options.delete(:hold_until_signal)
+      options.delete(:media_ids) if options.fetch(:media_ids).empty?
       session = PoolLeaseSession.new(**options)
       session.acquire!
       payload = {

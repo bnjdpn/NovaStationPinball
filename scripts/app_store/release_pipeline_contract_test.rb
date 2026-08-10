@@ -43,7 +43,6 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_equal "exact-v1", pipeline.fetch("iap_readback_contract")
     %w[
       status_script media_inputs media_expectations select_build_script
-      media_adoption_contract
     ].each do |key|
       path = File.expand_path(pipeline.fetch(key), ROOT)
       assert path.start_with?("#{ROOT}/"), "#{key} escaped app root"
@@ -52,10 +51,13 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     end
     refute pipeline.key?("simulator_requirements"),
            "Nova owns its fixed-pool leases inside the app-local generator"
-    assert_equal "adopt_media", pipeline.fetch("media_adoption_lane")
+    refute pipeline.key?("media_adoption_contract"),
+           "the prior 36+6 adoption contract is historical after a shipping UI change"
+    refute pipeline.key?("media_adoption_lane"),
+           "a new release run must regenerate media instead of invoking adoption"
 
     contract = JSON.parse(
-      File.binread(File.join(ROOT, pipeline.fetch("media_adoption_contract")))
+      File.binread(File.join(ROOT, "fastlane", "media_adoption_contract.json"))
     )
     assert_equal 2, contract.fetch("schema_version")
     assert_equal "NovaStationPinball", contract.fetch("app_slug")

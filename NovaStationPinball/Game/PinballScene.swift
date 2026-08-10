@@ -19,7 +19,7 @@ final class PinballScene: SKScene {
     private var interpreter = TouchInterpreter()
     private var previousUpdateTime: TimeInterval?
     private var lifecycleIsPaused = true
-    private var tableGuideIsPresented = false
+    private var modalOverlayIsPresented = false
     private var didBuildRasterTable = false
     private let leftFlipper = SKSpriteNode(texture: SKTexture(imageNamed: "flipper-left"))
     private let rightFlipper = SKSpriteNode(texture: SKTexture(imageNamed: "flipper-right"))
@@ -97,9 +97,9 @@ final class PinballScene: SKScene {
         previousUpdateTime = nil
     }
 
-    func setTableGuidePresented(_ presented: Bool) {
-        guard tableGuideIsPresented != presented else { return }
-        tableGuideIsPresented = presented
+    func setModalOverlayPresented(_ presented: Bool) {
+        guard modalOverlayIsPresented != presented else { return }
+        modalOverlayIsPresented = presented
         updateMenu(for: driver.phase)
     }
 
@@ -221,7 +221,7 @@ final class PinballScene: SKScene {
     }
 
     private func updateMenu(for phase: GameSessionPhase) {
-        menuLayer.isHidden = tableGuideIsPresented || phase == .playing
+        menuLayer.isHidden = modalOverlayIsPresented || phase == .playing
         launchArtwork.isHidden = phase != .launch
         gameOverArtwork.isHidden = phase != .gameOver
     }

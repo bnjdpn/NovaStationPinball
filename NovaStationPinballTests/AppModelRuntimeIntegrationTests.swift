@@ -86,11 +86,11 @@ final class AppModelRuntimeIntegrationTests: XCTestCase {
 
         XCTAssertFalse(harness.model.isSimulationPaused)
 
-        harness.model.beginTableGuide()
+        harness.model.beginModalOverlay()
 
         XCTAssertTrue(harness.model.isSimulationPaused)
 
-        harness.model.endTableGuide()
+        harness.model.endModalOverlay()
 
         XCTAssertFalse(harness.model.isSimulationPaused)
     }
@@ -103,8 +103,8 @@ final class AppModelRuntimeIntegrationTests: XCTestCase {
 
         XCTAssertTrue(harness.model.isSimulationPaused)
 
-        harness.model.beginTableGuide()
-        harness.model.endTableGuide()
+        harness.model.beginModalOverlay()
+        harness.model.endModalOverlay()
 
         XCTAssertTrue(harness.model.isSimulationPaused)
     }
@@ -116,12 +116,12 @@ final class AppModelRuntimeIntegrationTests: XCTestCase {
 
         XCTAssertTrue(harness.model.isSimulationPaused)
 
-        harness.model.beginTableGuide()
+        harness.model.beginModalOverlay()
         harness.model.setApplicationActivity(.active)
 
         XCTAssertTrue(harness.model.isSimulationPaused)
 
-        harness.model.endTableGuide()
+        harness.model.endModalOverlay()
 
         XCTAssertFalse(harness.model.isSimulationPaused)
     }
@@ -130,15 +130,15 @@ final class AppModelRuntimeIntegrationTests: XCTestCase {
         let harness = try RuntimeHarness()
         defer { harness.cleanup() }
         harness.activate()
-        harness.model.beginTableGuide()
+        harness.model.beginModalOverlay()
 
         harness.model.audioInterruptionBegan()
         harness.model.audioInterruptionEnded(shouldResume: false)
-        harness.model.endTableGuide()
+        harness.model.endModalOverlay()
 
         XCTAssertTrue(harness.model.isSimulationPaused)
         XCTAssertTrue(harness.model.lifecycleCoordinator.isUserPaused)
-        XCTAssertFalse(harness.model.lifecycleCoordinator.isTableGuidePresented)
+        XCTAssertFalse(harness.model.lifecycleCoordinator.isModalOverlayPresented)
     }
 }
 

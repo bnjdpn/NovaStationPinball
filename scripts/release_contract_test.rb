@@ -142,6 +142,119 @@ class ReleaseContractTest < Minitest::Test
     assert_match(/<key>com\.apple\.developer\.game-center<\/key>\s*<true\/>/, entitlements)
   end
 
+  def test_optional_tip_ui_is_reachable_storekit_driven_and_statically_owned
+    root_view = File.read(
+      File.join(ROOT, "NovaStationPinball/App/RootView.swift"),
+      encoding: "UTF-8"
+    )
+    identifiers = %w[tipJarOpen tipJar tipJarClose tipJarStatus]
+    identifiers.each { |identifier| assert_includes root_view, %Q{"#{identifier}"} }
+    assert_includes root_view, '"tipJarPurchase.\(tip.definition.id)"'
+    assert_includes root_view, "model.availableTips()"
+    assert_match(/model\.purchaseTip\(\s*productIdentifier:/m, root_view)
+    assert_includes root_view, "tip.displayName"
+    assert_includes root_view, "tip.displayPrice"
+    refute_match(/(?:USD|EUR|\$\s*\d|\d+[.,]\d{2}\s*€)/, root_view)
+
+    layout_test = File.read(
+      File.join(ROOT, "NovaStationPinballUITests/LayoutUITests.swift"),
+      encoding: "UTF-8"
+    )
+    identifiers.each { |identifier| assert_includes layout_test, identifier }
+    %w[tip.cafe tip.merci tip.soutien].each do |tip_id|
+      assert_includes layout_test, %Q{"#{tip_id}"}
+    end
+    assert_includes layout_test, 'app.buttons["tipJarPurchase.\(identifier)"]'
+    assert_includes layout_test, 'launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"'
+    assert_includes layout_test, "-ui-testing"
+
+    tip_support = File.read(
+      File.join(ROOT, "NovaStationPinball/Services/TipJarSupport.swift"),
+      encoding: "UTF-8"
+    )
+    app_model = File.read(
+      File.join(ROOT, "NovaStationPinball/App/AppModel.swift"),
+      encoding: "UTF-8"
+    )
+    assert_includes tip_support, "displayName: product.displayName"
+    assert_includes tip_support, "displayPrice: product.displayPrice"
+    assert_includes app_model, "TipJarSupportFactory.applicationDefault()"
+    assert_match(/#if DEBUG.*?NOVA_TIP_JAR_FIXTURE.*?#endif/m, tip_support)
+    assert_match(/#if DEBUG.*?actor UITestingTipJarSupport.*?#endif/m, tip_support)
+    assert_includes tip_support, 'arguments.contains("-ui-testing")'
+    assert_includes tip_support, 'environment["NOVA_TIP_JAR_FIXTURE"] == "available"'
+    assert_includes tip_support, "return StoreKitTipJarSupport()"
+    assert_includes tip_support, "Transaction.unfinished"
+    assert_includes tip_support, "Transaction.updates"
+    assert_includes tip_support, "knownProductIdentifiers.contains(transaction.productIdentifier)"
+    assert_includes tip_support, "await transaction.finish()"
+
+    storekit = JSON.parse(
+      File.read(
+        File.join(ROOT, "NovaStationPinball/StoreKit/NovaStationPinball.storekit"),
+        encoding: "UTF-8"
+      )
+    )
+    storekit.fetch("products").each do |product|
+      localizations = product.fetch("localizations")
+      english_name = localizations.find { |entry| entry.fetch("locale") == "en_US" }.fetch("displayName")
+      french_name = localizations.find { |entry| entry.fetch("locale") == "fr_FR" }.fetch("displayName")
+      price = product.fetch("displayPrice")
+      assert_includes tip_support, %Q{displayName: french ? "#{french_name}" : "#{english_name}"}
+      assert_includes tip_support, %Q{displayPrice: french ? "#{price.tr(".", ",")} €" : "$#{price}"}
+    end
+
+    screenshot_tests = File.read(
+      File.join(ROOT, "NovaStationPinballUITests/StoreScreenshotUITests.swift"),
+      encoding: "UTF-8"
+    )
+    preview_tests = File.read(
+      File.join(ROOT, "NovaStationPinballUITests/AppPreviewUITests.swift"),
+      encoding: "UTF-8"
+    )
+    [screenshot_tests, preview_tests].each do |media_test|
+      assert_includes media_test, "tipJarOpen"
+      refute_includes media_test, "NOVA_TIP_JAR_FIXTURE"
+    end
+    review_test = File.read(
+      File.join(ROOT, "NovaStationPinballUITests/TipJarReviewUITests.swift"),
+      encoding: "UTF-8"
+    )
+    xcode_project = File.read(
+      File.join(ROOT, "NovaStationPinball.xcodeproj/project.pbxproj"),
+      encoding: "UTF-8"
+    )
+    assert_includes review_test, 'launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"'
+    assert_includes review_test, "XCUIScreen.main.screenshot()"
+    assert_includes review_test, "[2064, 2752]"
+    assert_includes review_test, "screenshot.image.cgImage"
+    assert_includes review_test, "fixture DEBUG"
+    refute_includes review_test, "purchaseButton.tap()"
+    assert_includes xcode_project, "TipJarReviewUITests.swift in Sources"
+    assert_match(
+      /if activeOverlay == nil \{\s+Rectangle\(\)\.fill\(\.clear\).*?"art\.frame\.4x3".*?HStack\(spacing: 0\).*?"art\.table".*?"art\.console"/m,
+      root_view
+    )
+    assert_operator root_view.scan(".accessibilityAddTraits(.isModal)").length, :>=, 2
+    assert_includes root_view, ".frame(width: 44, height: 44)"
+    assert_includes layout_test, 'app.otherElements["art.frame.4x3"].exists'
+    assert_includes layout_test, 'app.buttons["tipJarClose"].frame.width'
+
+    catalog = JSON.parse(
+      File.read(
+        File.join(ROOT, "NovaStationPinball/Resources/Localizable.xcstrings"),
+        encoding: "UTF-8"
+      )
+    ).fetch("strings")
+    %w[
+      tips.body tips.close tips.loading tips.open tips.outcome.cancelled
+      tips.outcome.pending tips.outcome.purchased tips.outcome.unavailable
+      tips.outcome.unverified tips.purchase.hint tips.title tips.unavailable
+    ].each do |key|
+      assert_equal %w[en fr], catalog.fetch(key).fetch("localizations").keys.sort
+    end
+  end
+
   def test_task_11_aso_support_media_and_ui_scenario_contract
     metadata_files = %w[
       name.txt subtitle.txt description.txt keywords.txt promotional_text.txt
@@ -346,6 +459,7 @@ class ReleaseContractTest < Minitest::Test
       NovaStationPinball/App/MediaPreviewHandshake.swift
       NovaStationPinballTests/BootstrapTests.swift
       NovaStationPinballUITests/BootstrapUITests.swift
+      NovaStationPinballUITests/TipJarReviewUITests.swift
       NovaStationCore/Sources/NovaStationCore/NovaStationCore.swift
       NovaStationCore/Tests/NovaStationCoreTests/NovaStationCoreTests.swift
       scripts/release_contract.rb scripts/release_contract_test.rb

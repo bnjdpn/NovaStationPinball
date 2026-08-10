@@ -57,7 +57,19 @@ final class LocalizationContractTests: XCTestCase {
         "status.promotion",
         "status.restored",
         "status.system_ready",
-        "status.tilt"
+        "status.tilt",
+        "tips.body",
+        "tips.close",
+        "tips.loading",
+        "tips.open",
+        "tips.outcome.cancelled",
+        "tips.outcome.pending",
+        "tips.outcome.purchased",
+        "tips.outcome.unavailable",
+        "tips.outcome.unverified",
+        "tips.purchase.hint",
+        "tips.title",
+        "tips.unavailable"
     ] + MissionID.allCases.map { "mission.\($0.rawValue)" }
       + ClearanceLevel.allCases.map { "clearance.\($0.rawValue)" }) }
 

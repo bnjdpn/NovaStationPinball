@@ -67,4 +67,50 @@ final class LayoutUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["tableGuide"].waitForExistence(timeout: 1))
         XCTAssertTrue(open.waitForExistence(timeout: 2))
     }
+
+    func testTipJarRendersProviderNamesAndPricesPurchasesAndCloses() {
+        XCUIDevice.shared.orientation = .landscapeRight
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-ui-testing",
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US"
+        ]
+        app.launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"
+        app.launch()
+
+        let open = app.buttons["tipJarOpen"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+
+        XCTAssertTrue(app.alerts["tipJar"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.otherElements["art.frame.4x3"].exists)
+        XCTAssertFalse(app.otherElements["art.table"].exists)
+        XCTAssertFalse(app.otherElements["art.console"].exists)
+        XCTAssertGreaterThanOrEqual(app.buttons["tipJarClose"].frame.width, 44)
+        XCTAssertGreaterThanOrEqual(app.buttons["tipJarClose"].frame.height, 44)
+        let expected = [
+            ("tip.cafe", "Coffee", "0.99"),
+            ("tip.merci", "Big thanks", "2.99"),
+            ("tip.soutien", "Strong support", "5.99")
+        ]
+        for (identifier, name, price) in expected {
+            let button = app.buttons["tipJarPurchase.\(identifier)"]
+            XCTAssertTrue(button.waitForExistence(timeout: 5), identifier)
+            XCTAssertTrue(button.label.contains(name), button.label)
+            XCTAssertTrue(button.label.contains(price), button.label)
+        }
+
+        app.buttons["tipJarPurchase.tip.cafe"].tap()
+        XCTAssertTrue(app.staticTexts["tipJarStatus"].waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            app.staticTexts["tipJarStatus"].label,
+            "Thank you! This tip changes nothing in the game."
+        )
+        XCTAssertTrue(app.buttons["tipJarPurchase.tip.cafe"].isEnabled)
+
+        app.buttons["tipJarClose"].tap()
+        XCTAssertFalse(app.alerts["tipJar"].waitForExistence(timeout: 1))
+        XCTAssertTrue(open.waitForExistence(timeout: 2))
+    }
 }

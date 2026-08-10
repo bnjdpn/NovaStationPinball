@@ -27,6 +27,7 @@
 		584D7263D1873425F153D51C /* station-panels.png in Resources */ = {isa = PBXBuildFile; fileRef = 6E204A8E2983CB323B6A0424 /* station-panels.png */; };
 		5F6841084BABE5E9C405D969 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A7CFFD0F1E5FEBEEB2B6EE8D /* Localizable.xcstrings */; };
 		66C2144211140039C9D0D3F9 /* NovaStationPinballApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280CE621B703FB8A0210E09B /* NovaStationPinballApp.swift */; };
+		68C53E40EA1C3447985C674D /* TipJarReviewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E917908324348020F020D8F /* TipJarReviewUITests.swift */; };
 		69A99022E4B35A116E26BF0C /* SimulationDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C069B26C4A9DD9748895E2 /* SimulationDriver.swift */; };
 		6F8CE6ABD137080115B84206 /* LocalGameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C25B16B08029EA5ED715E397 /* LocalGameStore.swift */; };
 		70ADF6A3FE10DBDB6D40BACA /* MediaScenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BFE0A031DFC2910D2EA5E39 /* MediaScenario.swift */; };
@@ -115,6 +116,7 @@
 		7902327A808B6D80B5A225FB /* plunger.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = plunger.png; sourceTree = "<group>"; };
 		7A9B772B5B8936C992AFB07A /* bumper.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = bumper.png; sourceTree = "<group>"; };
 		7BE87560EFEE49EF506E3A99 /* ball.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ball.png; sourceTree = "<group>"; };
+		7E917908324348020F020D8F /* TipJarReviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarReviewUITests.swift; sourceTree = "<group>"; };
 		82DAA25FE1AB5B5FC8A76BC4 /* TipJarSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarSupport.swift; sourceTree = "<group>"; };
 		8317AA570EF471601CEE2F06 /* AudioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineTests.swift; sourceTree = "<group>"; };
 		8365AE9D439BF33503076AAB /* menu-background.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "menu-background.png"; sourceTree = "<group>"; };
@@ -236,6 +238,7 @@
 				B0FF8599CF2CA8886C0756C1 /* BootstrapUITests.swift */,
 				DC587FBBD8BF4ACBD727EACB /* LayoutUITests.swift */,
 				AC13B05449114A9D99EB808F /* StoreScreenshotUITests.swift */,
+				7E917908324348020F020D8F /* TipJarReviewUITests.swift */,
 			);
 			path = NovaStationPinballUITests;
 			sourceTree = "<group>";
@@ -502,6 +505,7 @@
 				94099F1201292BAEA7B78F11 /* BootstrapUITests.swift in Sources */,
 				FE39272A94770A1E3A8F85BB /* LayoutUITests.swift in Sources */,
 				4E866CB7C639EE70CCE8C588 /* StoreScreenshotUITests.swift in Sources */,
+				68C53E40EA1C3447985C674D /* TipJarReviewUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
