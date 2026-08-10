@@ -31,9 +31,9 @@ module NovaStationPinballMediaAdoption
     end
   ).sort.freeze
   CONTRACT_KEYS = %w[
-    allowed_source_changes app_slug baseline_head contract_self_sha256
-    media_proof preview_count release_run_id schema_version screenshot_count
-    source_revision
+    allowed_source_changes app_slug baseline_contract_sha256 baseline_head
+    contract_self_sha256 media_proof preview_count release_run_id schema_version
+    screenshot_count source_revision
   ].freeze
   SOURCE_CHANGE_KEYS = %w[
     after_sha256 before_sha256 class path
@@ -292,7 +292,7 @@ module NovaStationPinballMediaAdoption
       raise AdoptionError, "adoption path is missing: #{error.message}"
     end
 
-    def validate!
+    def validate!(write_receipt: true)
       contract = read_contract!
       validate_paths!(contract)
       release_head, source_changes = validate_source!(contract)
@@ -306,6 +306,7 @@ module NovaStationPinballMediaAdoption
         "app_slug" => APP_SLUG,
         "release_run_id" => contract.fetch("release_run_id"),
         "baseline_head" => contract.fetch("baseline_head"),
+        "baseline_contract_sha256" => contract.fetch("baseline_contract_sha256"),
         "release_head" => release_head,
         "source_revision" => contract.fetch("source_revision"),
         "source_candidate_id" => @candidate_id,
@@ -318,7 +319,7 @@ module NovaStationPinballMediaAdoption
           JSON.generate(NovaStationPinballMediaAdoption.canonical(unsigned))
         )
       )
-      write_once!(document)
+      write_once!(document) if write_receipt
       document
     end
 
@@ -334,6 +335,7 @@ module NovaStationPinballMediaAdoption
              document["app_slug"] == APP_SLUG &&
              document["release_run_id"].to_s.match?(RUN_ID) &&
              document["baseline_head"].to_s.match?(COMMIT) &&
+             document["baseline_contract_sha256"].to_s.match?(SHA256) &&
              document["source_revision"].to_s.match?(SHA256) &&
              document["screenshot_count"] == 36 &&
              document["preview_count"] == 6
@@ -413,13 +415,15 @@ module NovaStationPinballMediaAdoption
       contract_after = NovaStationPinballMediaAdoption.file_sha256_at_commit(
         @repo_root, release_head, CONTRACT_PATH
       )
-      unless contract_before.nil? && contract_after == Digest::SHA256.file(@contract_path).hexdigest
-        raise AdoptionError, "adoption contract must be one exact canonical source addition"
+      unless contract_before == contract.fetch("baseline_contract_sha256") &&
+             contract_after == Digest::SHA256.file(@contract_path).hexdigest
+        raise AdoptionError,
+              "adoption contract does not continue the exact canonical baseline contract"
       end
       proof << {
         "path" => CONTRACT_PATH,
         "class" => "adoption_contract",
-        "before_sha256" => nil,
+        "before_sha256" => contract_before,
         "after_sha256" => contract_after
       }
       [release_head, proof.sort_by { |item| item.fetch("path") }]
@@ -616,20 +620,23 @@ module NovaStationPinballMediaAdoption
 
     def run(argv)
       options = {}
+      check_only = false
       OptionParser.new do |flags|
-        flags.banner = "Usage: adopt_media.rb --repo-root PATH --run-root PATH --contract PATH --candidate-id SHA256 --output PATH"
+        flags.banner = "Usage: adopt_media.rb --repo-root PATH --run-root PATH --contract PATH --candidate-id SHA256 --output PATH [--check-only]"
         flags.on("--repo-root PATH") { |value| options[:repo_root] = value }
         flags.on("--run-root PATH") { |value| options[:run_root] = value }
         flags.on("--contract PATH") { |value| options[:contract_path] = value }
         flags.on("--candidate-id SHA256") { |value| options[:candidate_id] = value }
         flags.on("--output PATH") { |value| options[:output_path] = value }
+        flags.on("--check-only") { check_only = true }
       end.parse!(argv)
       required = %i[repo_root run_root contract_path candidate_id output_path]
       missing = required.reject { |key| options.key?(key) }
       raise AdoptionError, "missing adoption arguments: #{missing.join(', ')}" unless missing.empty?
 
-      receipt = Contract.new(**options).validate!
-      puts "media_adoption: OK (#{receipt.dig('media', 'screenshots', 'count')} screenshots, #{receipt.dig('media', 'previews', 'count')} previews)"
+      receipt = Contract.new(**options).validate!(write_receipt: !check_only)
+      status = check_only ? "CHECK OK" : "OK"
+      puts "media_adoption: #{status} (#{receipt.dig('media', 'screenshots', 'count')} screenshots, #{receipt.dig('media', 'previews', 'count')} previews)"
       0
     rescue AdoptionError, OptionParser::ParseError => error
       warn "media_adoption: #{error.message}"

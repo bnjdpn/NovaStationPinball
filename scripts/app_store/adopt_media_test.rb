@@ -11,7 +11,7 @@ require File.expand_path(
 )
 
 class NovaStationPinballMediaAdoptionTest < Minitest::Test
-  RUN_ID = "20260810-nova-100-overlayguard-019fe558"
+  RUN_ID = "20260810-nova-100-official-545d2d2a-precompute"
 
   def test_adoption_binds_exact_baseline_candidate_and_media_payloads
     with_fixture do |fixture|
@@ -19,6 +19,8 @@ class NovaStationPinballMediaAdoptionTest < Minitest::Test
 
       assert_equal "adopted_from", receipt.fetch("provenance_mode")
       assert_equal fixture.fetch(:baseline), receipt.fetch("baseline_head")
+      assert_equal fixture.fetch(:baseline_contract_sha256),
+                   receipt.fetch("baseline_contract_sha256")
       assert_equal fixture.fetch(:head), receipt.fetch("release_head")
       assert_equal fixture.fetch(:candidate_id),
                    receipt.fetch("source_candidate_id")
@@ -28,8 +30,71 @@ class NovaStationPinballMediaAdoptionTest < Minitest::Test
       assert_equal 4_320,
                    receipt.dig("media", "system_overlay", "scanned_frames")
       assert_match(/\A[0-9a-f]{64}\z/, receipt.fetch("media_candidate_id"))
+      contract_change = receipt.fetch("source_changes").find do |change|
+        change.fetch("path") == NovaStationPinballMediaAdoption::CONTRACT_PATH
+      end
+      assert_equal fixture.fetch(:baseline_contract_sha256),
+                   contract_change.fetch("before_sha256")
+      assert_equal Digest::SHA256.file(fixture.fetch(:contract_path)).hexdigest,
+                   contract_change.fetch("after_sha256")
       assert_equal receipt, fixture.fetch(:adoption).validate!
       assert_equal 0o600, File.stat(fixture.fetch(:output)).mode & 0o777
+    end
+  end
+
+  def test_check_only_validates_everything_without_writing_a_receipt
+    with_fixture do |fixture|
+      receipt = fixture.fetch(:adoption).validate!(write_receipt: false)
+
+      assert_equal "adopted_from", receipt.fetch("provenance_mode")
+      refute File.exist?(fixture.fetch(:output))
+      refute File.symlink?(fixture.fetch(:output))
+    end
+  end
+
+  def test_adoption_rejects_a_wrong_baseline_contract_lineage
+    with_fixture(baseline_contract_sha256: "f" * 64) do |fixture|
+      assert_raises(NovaStationPinballMediaAdoption::AdoptionError) do
+        fixture.fetch(:adoption).validate!(write_receipt: false)
+      end
+    end
+  end
+
+  def test_adoption_rejects_noncanonical_contract_run_and_output_paths
+    with_fixture do |fixture|
+      foreign_contract = File.join(
+        fixture.fetch(:repo), "fastlane", "foreign-adoption-contract.json"
+      )
+      FileUtils.cp(fixture.fetch(:contract_path), foreign_contract)
+      assert_raises(NovaStationPinballMediaAdoption::AdoptionError) do
+        NovaStationPinballMediaAdoption::Contract.new(
+          **fixture.fetch(:arguments).merge(contract_path: foreign_contract)
+        ).validate!(write_receipt: false)
+      end
+
+      foreign_run = File.join(
+        fixture.fetch(:repo), "Builds", "AppStore", "NovaStationPinball",
+        "foreign-run"
+      )
+      FileUtils.mkdir_p(File.join(foreign_run, "logs"))
+      assert_raises(NovaStationPinballMediaAdoption::AdoptionError) do
+        NovaStationPinballMediaAdoption::Contract.new(
+          **fixture.fetch(:arguments).merge(
+            run_root: foreign_run,
+            output_path: File.join(foreign_run, "logs", "media-adoption.json")
+          )
+        ).validate!(write_receipt: false)
+      end
+
+      assert_raises(NovaStationPinballMediaAdoption::AdoptionError) do
+        NovaStationPinballMediaAdoption::Contract.new(
+          **fixture.fetch(:arguments).merge(
+            output_path: File.join(fixture.fetch(:run), "logs", "foreign.json")
+          )
+        ).validate!(write_receipt: false)
+      end
+    ensure
+      FileUtils.rm_f(foreign_contract) if defined?(foreign_contract)
     end
   end
 
@@ -211,7 +276,7 @@ class NovaStationPinballMediaAdoptionTest < Minitest::Test
 
   private
 
-  def with_fixture
+  def with_fixture(baseline_contract_sha256: nil)
     Dir.mktmpdir("nova-media-adoption") do |directory|
       repo = File.join(directory, "repo")
       FileUtils.mkdir_p(repo)
@@ -223,30 +288,44 @@ class NovaStationPinballMediaAdoptionTest < Minitest::Test
         "Builds/\n/fastlane/asc_api_key.json\n!/fastlane/asc_api_key.json/\n"
       )
       File.write(File.join(repo, "Game.swift"), "baseline\n")
-      git!(repo, "add", ".gitignore", "Game.swift")
+      FileUtils.mkdir_p(File.join(repo, "fastlane"))
+      FileUtils.mkdir_p(File.join(repo, "scripts", "app_store"))
+      contract_path = File.join(repo, "fastlane", "media_adoption_contract.json")
+      tooling_path = File.join(repo, "scripts", "app_store", "adopt_media.rb")
+      File.write(
+        contract_path,
+        JSON.pretty_generate(
+          "schema_version" => 2,
+          "app_slug" => "NovaStationPinball",
+          "release_run_id" => "historical-adoption-contract"
+        ) + "\n"
+      )
+      File.write(tooling_path, "baseline release tooling\n")
+      git!(repo, "add", ".gitignore", "Game.swift", "fastlane", "scripts")
       git!(repo, "commit", "-q", "-m", "baseline")
       baseline = git!(repo, "rev-parse", "HEAD").strip
+      observed_baseline_contract_sha256 = Digest::SHA256.file(contract_path).hexdigest
       source_revision = NovaStationPinballMediaAdoption.source_fingerprint_at_commit(
         repo, baseline
       )
 
-      FileUtils.mkdir_p(File.join(repo, "fastlane"))
-      FileUtils.mkdir_p(File.join(repo, "scripts", "app_store"))
       File.write(File.join(repo, "scripts", "app_store", "adopt_media.rb"), "release tooling\n")
-      contract_path = File.join(repo, "fastlane", "media_adoption_contract.json")
-      tooling_path = File.join(repo, "scripts", "app_store", "adopt_media.rb")
       contract = {
         "schema_version" => 2,
         "app_slug" => "NovaStationPinball",
         "release_run_id" => RUN_ID,
         "baseline_head" => baseline,
+        "baseline_contract_sha256" => baseline_contract_sha256 ||
+          observed_baseline_contract_sha256,
         "source_revision" => source_revision,
         "screenshot_count" => 36,
         "preview_count" => 6,
         "allowed_source_changes" => [{
           "path" => "scripts/app_store/adopt_media.rb",
           "class" => "release_tooling",
-          "before_sha256" => nil,
+          "before_sha256" => NovaStationPinballMediaAdoption.file_sha256_at_commit(
+            repo, baseline, "scripts/app_store/adopt_media.rb"
+          ),
           "after_sha256" => Digest::SHA256.file(tooling_path).hexdigest
         }]
       }
@@ -289,8 +368,9 @@ class NovaStationPinballMediaAdoptionTest < Minitest::Test
       adoption = NovaStationPinballMediaAdoption::Contract.new(**arguments)
       yield(
         repo: repo, run: run, baseline: baseline, head: head,
+        baseline_contract_sha256: observed_baseline_contract_sha256,
         source_revision: source_revision,
-        candidate_id: candidate_id, output: output,
+        candidate_id: candidate_id, output: output, contract_path: contract_path,
         arguments: arguments, adoption: adoption
       )
     end

@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
+require "digest"
 require "json"
 require "minitest/autorun"
+require_relative "adopt_media"
 
 class NovaStationPinballReleasePipelineContractTest < Minitest::Test
   ROOT = File.expand_path("../..", __dir__)
@@ -51,44 +53,60 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     end
     refute pipeline.key?("simulator_requirements"),
            "Nova owns its fixed-pool leases inside the app-local generator"
-    refute pipeline.key?("media_adoption_contract"),
-           "the prior 36+6 adoption contract is historical after a shipping UI change"
-    refute pipeline.key?("media_adoption_lane"),
-           "a new release run must regenerate media instead of invoking adoption"
+    assert_equal "fastlane/media_adoption_contract.json",
+                 pipeline.fetch("media_adoption_contract")
+    assert_equal "adopt_media", pipeline.fetch("media_adoption_lane")
 
     contract = JSON.parse(
       File.binread(File.join(ROOT, "fastlane", "media_adoption_contract.json"))
     )
     assert_equal 2, contract.fetch("schema_version")
     assert_equal "NovaStationPinball", contract.fetch("app_slug")
-    assert_equal "20260810-nova-100-overlayguard-019fe558",
+    assert_equal "20260810-nova-100-official-545d2d2a-precompute",
                  contract.fetch("release_run_id")
-    assert_equal "10a88967f740bada3789ba9d4c99edddb4db2ed1",
+    assert_equal "b80afffac456388c21088b189a49c48da121d543",
                  contract.fetch("baseline_head")
-    assert_equal "d85dbcc0ab60980b482b39ababeff38e2346660b7fe409ce16e553bbf0cdeb13",
+    assert_equal "a2e195067298a7b07a4f2de011290d584efd4b1d7c30f69950b60a53ecfdfa0e",
+                 contract.fetch("baseline_contract_sha256")
+    assert_equal "545d2d2a4fcd1f0748954c4b7b53a5a4698d261ab97f86a4b9a0153ae9ff98d0",
                  contract.fetch("source_revision")
     assert_equal 36, contract.fetch("screenshot_count")
     assert_equal 6, contract.fetch("preview_count")
     proof = contract.fetch("media_proof")
     assert_equal 36, proof.dig("screenshots", "count")
-    assert_match(/\A[0-9a-f]{64}\z/, proof.dig("screenshots", "sha256"))
+    assert_equal "84046113af2d7c4024d3ed7b6edadbc8d1945244a6940369609b26b1390567a5",
+                 proof.dig("screenshots", "sha256")
     assert_equal 6, proof.dig("previews", "count")
-    assert_match(/\A[0-9a-f]{64}\z/, proof.dig("previews", "sha256"))
+    assert_equal "9e425544407a30cfc283f27d5fe56d8070efea60eafe38baa6315b90e2ac262d",
+                 proof.dig("previews", "sha256")
     assert_equal 1, proof.dig("manifest", "count")
-    assert_match(/\A[0-9a-f]{64}\z/, proof.dig("manifest", "sha256"))
+    assert_equal "809bfcbe78707052c19f035aee409f16c15b9937ebcfd0005e23bd597f5becb5",
+                 proof.dig("manifest", "sha256")
     assert_equal 6, proof.dig("system_overlay", "reports")
     assert_equal 4_320, proof.dig("system_overlay", "scanned_frames")
     assert_equal 0, proof.dig("system_overlay", "violation_count")
-    assert_match(/\A[0-9a-f]{64}\z/,
-                 proof.dig("system_overlay", "semantic_sha256"))
+    assert_equal "759b80752a7008a9cd053ddbe4d21990c6474ad7f6191b28403c6e84591ac86e",
+                 proof.dig("system_overlay", "semantic_sha256")
     assert_equal 19, proof.dig("human_review", "count")
     assert_equal "PASS", proof.dig("human_review", "verdict")
-    assert_match(/\A[0-9a-f]{64}\z/,
-                 proof.dig("human_review", "sha256"))
-    assert_match(/\A[0-9a-f]{64}\z/, contract.fetch("contract_self_sha256"))
-    assert contract.fetch("allowed_source_changes").all? { |change|
+    assert_equal "4a9009d720a2a30cfaed1c2565589dbbe750b88d44c277440ef6a71a29f12f5f",
+                 proof.dig("human_review", "sha256")
+    assert_equal Digest::SHA256.hexdigest(
+      NovaStationPinballMediaAdoption.canonical_bytes(
+        contract.reject { |key, _| key == "contract_self_sha256" }
+      )
+    ), contract.fetch("contract_self_sha256")
+    changes = contract.fetch("allowed_source_changes")
+    assert_equal %w[
+      fastlane/release_config.json
+      scripts/app_store/adopt_media.rb
+      scripts/app_store/adopt_media_test.rb
+      scripts/app_store/release_pipeline_contract_test.rb
+    ], changes.map { |change| change.fetch("path") }
+    assert changes.all? { |change|
       change.keys.sort == %w[after_sha256 before_sha256 class path] &&
         change.fetch("class") == "release_tooling" &&
+        change.fetch("before_sha256").match?(/\A[0-9a-f]{64}\z/) &&
         change.fetch("after_sha256").match?(/\A[0-9a-f]{64}\z/)
     }
   end
@@ -156,6 +174,8 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_includes adoption, "nova_adopt_media!"
     assert_includes source, "scripts/app_store/adopt_media.rb"
     assert_includes source, "scripts/app_store/adopt_media_test.rb"
+    assert_includes File.binread(File.join(ROOT, "scripts/app_store/adopt_media.rb")),
+                    'flags.on("--check-only")'
     assert_includes File.binread(File.join(ROOT, ".gitignore")),
                     "fastlane/asc_api_key.json"
 

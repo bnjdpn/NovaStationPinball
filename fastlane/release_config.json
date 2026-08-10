@@ -66,6 +66,8 @@
         "reason": "not_configured_not_mutated"
       }
     ],
+    "media_adoption_contract": "fastlane/media_adoption_contract.json",
+    "media_adoption_lane": "adopt_media",
     "iap_readback_contract": "exact-v1",
     "content_rights_readback_contract": "exact-v1"
   }
