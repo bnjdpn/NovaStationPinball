@@ -34,4 +34,37 @@ final class LayoutUITests: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
+
+    func testTableGuideNavigatesEveryStepAndCloses() {
+        XCUIDevice.shared.orientation = .landscapeRight
+        let app = XCUIApplication()
+        app.launchArguments += ["-ui-testing"]
+        app.launch()
+
+        let open = app.buttons["tableGuideOpen"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+
+        XCTAssertTrue(app.otherElements["tableGuideStep.controls"].waitForExistence(timeout: 3))
+
+        let next = app.buttons["tableGuideNext"]
+        XCTAssertTrue(next.exists)
+        next.tap()
+        XCTAssertTrue(app.otherElements["tableGuideStep.missions"].waitForExistence(timeout: 3))
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "interactive-table-guide-missions"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        next.tap()
+        XCTAssertTrue(app.otherElements["tableGuideStep.progress"].waitForExistence(timeout: 3))
+
+        let done = app.buttons["tableGuideDone"]
+        XCTAssertTrue(done.exists)
+        done.tap()
+
+        XCTAssertFalse(app.otherElements["tableGuide"].waitForExistence(timeout: 1))
+        XCTAssertTrue(open.waitForExistence(timeout: 2))
+    }
 }

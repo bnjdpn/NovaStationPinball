@@ -6,6 +6,7 @@ BUILT FOR PINBALL
 • Responsive two-thumb flippers
 • Pull-and-release plunger
 • Short horizontal nudge gesture with tilt protection
+• Interactive guide for controls, mission lanes and progression targets
 • Missions, score multipliers, bonuses, extra balls and multiball
 • Local high scores saved on your device
 • Optional Game Center leaderboard

@@ -1,19 +1,143 @@
 # frozen_string_literal: true
 
+require "cfpropertylist"
+require "digest"
+require "fileutils"
+require "json"
+require "open3"
+require "pathname"
 require "rbconfig"
+require "shellwords"
+require "zip"
+require_relative "release_support"
+require File.expand_path("../scripts/app_store/metadata_readback.rb", __dir__)
+
+default_platform(:ios)
+skip_docs
+
+NOVA_APP_SLUG = "NovaStationPinball"
+NOVA_BUNDLE_ID = "com.bnjdpn.NovaStationPinball"
+NOVA_PROJECT = "NovaStationPinball.xcodeproj"
+NOVA_SCHEME = "NovaStationPinball"
+NOVA_TEAM_ID = "767SX34A7Z"
+NOVA_PROFILE_NAME = "NovaStationPinball_AppStore"
+NOVA_SCREENSHOT_COUNT = 36
+NOVA_PREVIEW_COUNT = 6
+
+def nova_app_root
+  File.expand_path("..", __dir__)
+end
+
+def nova_config_path
+  File.join(__dir__, "release_config.json")
+end
+
+def nova_config
+  @nova_config ||= JSON.parse(File.binread(nova_config_path))
+end
+
+def nova_run_id
+  @nova_run_id ||= begin
+    raw = ENV["RELEASE_RUN_ID"].to_s
+    raw = ENV["APP_RELEASE_RUN_ID"].to_s if raw.empty?
+    raw = ENV["NOVA_MEDIA_RUN_ID"].to_s if raw.empty?
+    raw = Time.now.utc.strftime("%Y%m%d-%H%M%S-#{$$}") if raw.empty?
+    NovaStationPinballReleaseSupport.run_id!(raw)
+  rescue ArgumentError => error
+    UI.user_error!(error.message)
+  end
+end
+
+def nova_candidate_id
+  NovaStationPinballReleaseSupport.candidate_id!(
+    ENV["APPS_FACTORY_CANDIDATE_ID"]
+  )
+rescue ArgumentError => error
+  UI.user_error!(error.message)
+end
+
+def nova_release_root
+  root = File.expand_path(
+    File.join(nova_app_root, nova_config.fetch("artifact_root"), nova_run_id)
+  )
+  expected = File.expand_path(
+    File.join(nova_app_root, "Builds", "AppStore", NOVA_APP_SLUG)
+  )
+  unless root.start_with?("#{expected}#{File::SEPARATOR}")
+    UI.user_error!("Release root escaped the app-local artifact root")
+  end
+  nova_reject_symlink_components!(root, base: nova_app_root)
+  root
+end
+
+def nova_release_path(*components)
+  path = File.expand_path(File.join(nova_release_root, *components))
+  unless path.start_with?("#{nova_release_root}#{File::SEPARATOR}")
+    UI.user_error!("Release path escaped the current run")
+  end
+  nova_reject_symlink_components!(path, base: nova_release_root)
+  path
+end
+
+def nova_scratch_path(*components)
+  configured = nova_config.fetch("scratch_root")
+  unless configured == "/private/tmp/apps-factory/NovaStationPinball"
+    UI.user_error!("Unexpected Nova scratch root")
+  end
+  path = File.expand_path(File.join(configured, nova_run_id, *components))
+  unless path.start_with?("#{configured}#{File::SEPARATOR}")
+    UI.user_error!("Scratch path escaped the Nova namespace")
+  end
+  nova_reject_symlink_components!(path, base: configured)
+  path
+end
+
+def nova_reject_symlink_components!(path, base:)
+  expanded_base = File.expand_path(base)
+  expanded = File.expand_path(path)
+  unless expanded == expanded_base ||
+         expanded.start_with?("#{expanded_base}#{File::SEPARATOR}")
+    UI.user_error!("Path escaped its declared root")
+  end
+  current = expanded_base
+  relative = Pathname.new(expanded).relative_path_from(Pathname.new(expanded_base))
+  relative.each_filename do |component|
+    current = File.join(current, component)
+    UI.user_error!("Path traverses a symbolic link: #{current}") if
+      File.symlink?(current)
+  end
+  expanded
+rescue ArgumentError => error
+  UI.user_error!("Invalid app-local path: #{error.message}")
+end
+
+def nova_prepare_paths!
+  %w[screenshots app_previews archives logs].each do |directory|
+    FileUtils.mkdir_p(nova_release_path(directory), mode: 0o700)
+  end
+  FileUtils.mkdir_p(nova_scratch_path("derived-data"), mode: 0o700)
+end
 
 def nova_media_run_id!
-  value = ENV["NOVA_MEDIA_RUN_ID"].to_s
-  UI.user_error!("NOVA_MEDIA_RUN_ID is required") unless value.match?(/\A[0-9A-Za-z][0-9A-Za-z._-]{0,79}\z/)
-  value
+  explicit = ENV["NOVA_MEDIA_RUN_ID"].to_s
+  if !explicit.empty? && explicit != nova_run_id
+    UI.user_error!("NOVA_MEDIA_RUN_ID must equal the checkpoint release run id")
+  end
+  ENV["NOVA_MEDIA_RUN_ID"] = nova_run_id
+  nova_run_id
 end
 
 def nova_media_generation_arguments
-  locales = ENV.fetch("NOVA_MEDIA_LOCALES", "en-US,fr-FR").split(",").map(&:strip).reject(&:empty?)
+  locales = ENV.fetch("NOVA_MEDIA_LOCALES", "en-US,fr-FR")
+               .split(",").map(&:strip).reject(&:empty?)
+  unless locales.sort == nova_config.fetch("locales").sort
+    UI.user_error!("A release media run must cover exactly en-US and fr-FR")
+  end
   execution_id = ENV["NOVA_MEDIA_EXECUTION_ID"].to_s
+  execution_id = nova_run_id if execution_id.empty?
   pool_config = ENV["NOVA_MEDIA_POOL_CONFIG"].to_s
-  UI.user_error!("NOVA_MEDIA_EXECUTION_ID is required") if execution_id.empty?
-  UI.user_error!("NOVA_MEDIA_POOL_CONFIG is required") if pool_config.empty?
+  UI.user_error!("NOVA_MEDIA_POOL_CONFIG is required for fixed-pool media generation") if
+    pool_config.empty?
   leases = {
     "iphone-17-pro-max" => ENV["NOVA_MEDIA_LEASE_IPHONE_17_PRO_MAX"],
     "iphone-se-3" => ENV["NOVA_MEDIA_LEASE_IPHONE_SE_3"],
@@ -22,102 +146,465 @@ def nova_media_generation_arguments
   locales.flat_map { |locale| ["--locale", locale] } +
     ["--execution-id", execution_id, "--pool-config", pool_config] +
     leases.flat_map do |device, path|
-      UI.user_error!("Missing exact fixed-pool lease for #{device}") if path.to_s.empty?
+      UI.user_error!("Missing exact fixed-pool lease for #{device}") if
+        path.to_s.empty?
       ["--lease", "#{device}=#{path}"]
     end
 end
 
-def nova_media_run_root(run_id)
-  File.expand_path("../Builds/AppStore/NovaStationPinball/#{run_id}", __dir__)
+def nova_regular_media_files(path, extensions)
+  return [] unless File.directory?(path) && !File.symlink?(path)
+
+  entries = Dir.glob(File.join(path, "**", "*"), File::FNM_DOTMATCH)
+  UI.user_error!("Media tree contains a symbolic link") if
+    entries.any? { |entry| File.symlink?(entry) }
+  entries.select do |entry|
+    File.file?(entry) && extensions.include?(File.extname(entry).downcase)
+  end.sort
 end
 
-default_platform(:ios)
-skip_docs
+def nova_generate_app_previews_if_missing!
+  files = nova_regular_media_files(nova_release_path("app_previews"), %w[.mov .mp4])
+  return if files.length == NOVA_PREVIEW_COUNT
+  unless files.empty?
+    UI.user_error!("Partial App Preview set found; preserve it and diagnose before retrying")
+  end
+
+  sh(
+    RbConfig.ruby,
+    File.join(nova_app_root, "scripts/app_store/generate_app_previews.rb"),
+    "--run-id", nova_media_run_id!,
+    *nova_media_generation_arguments
+  )
+end
+
+def nova_load_api_key
+  values = {
+    key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"].to_s,
+    issuer_id: ENV["APP_STORE_CONNECT_API_KEY_ISSUER_ID"].to_s,
+    key: ENV["APP_STORE_CONNECT_API_KEY_KEY"].to_s
+  }
+  if values.values.any? { |value| !value.empty? }
+    UI.user_error!("Incomplete App Store Connect environment") if
+      values.values.any?(&:empty?)
+    return app_store_connect_api_key(
+      key_id: values.fetch(:key_id), issuer_id: values.fetch(:issuer_id),
+      key_content: values.fetch(:key),
+      is_key_content_base64:
+        ENV["APP_STORE_CONNECT_API_KEY_IS_BASE64"] == "1",
+      in_house: false
+    )
+  end
+
+  path = nova_asc_key_path!
+  data = JSON.parse(File.binread(path))
+  app_store_connect_api_key(
+    key_id: data.fetch("key_id"), issuer_id: data.fetch("issuer_id"),
+    key_content: data["key"] || data.fetch("key_content"),
+    is_key_content_base64: data["is_key_content_base64"] == true,
+    in_house: false
+  )
+rescue JSON::ParserError, KeyError => error
+  UI.user_error!("Invalid App Store Connect API key input: #{error.message}")
+end
+
+def nova_asc_key_path!
+  path = ENV["ASC_API_KEY_PATH"].to_s
+  UI.user_error!("ASC_API_KEY_PATH is required; use bin/apple-release") if path.empty?
+  expanded = File.expand_path(path)
+  unless File.file?(expanded) && !File.symlink?(expanded)
+    UI.user_error!("ASC API key must be a regular non-symlink file")
+  end
+  expanded
+end
+
+def nova_run_asc_tool(name, *arguments)
+  path = File.join(nova_app_root, "scripts", "app_store", "#{name}.rb")
+  UI.user_error!("Missing app-local ASC helper: #{path}") unless File.file?(path)
+  sh(
+    RbConfig.ruby, path,
+    "--config", nova_config_path,
+    "--key-path", nova_asc_key_path!,
+    *arguments
+  )
+end
+
+def nova_wait_for_state!(condition, timeout: nil)
+  arguments = ["--condition", condition]
+  arguments += ["--timeout", timeout.to_s] if timeout
+  nova_run_asc_tool("wait_for_state", *arguments)
+end
+
+def nova_metadata_payload
+  NovaStationPinballMetadataReadback.identity(
+    config: nova_config, root: nova_app_root
+  )
+rescue ArgumentError => error
+  UI.user_error!(error.message)
+end
+
+def nova_mutation_proof(kind, payload)
+  {
+    intent_path: nova_release_path("logs", "#{kind}-upload-intent.json"),
+    receipt_path: nova_release_path("logs", "#{kind}-upload-receipt.json"),
+    kind: kind,
+    candidate_id: nova_candidate_id,
+    version: nova_config.fetch("version"),
+    payload: payload
+  }
+end
+
+def nova_transport_once(proof)
+  NovaStationPinballReleaseSupport.transport_once!(**proof) { yield }
+rescue NovaStationPinballReleaseSupport::AmbiguousTransport => error
+  UI.important(
+    "#{error.message} (#{error.error_class}); resuming with GET-only verification"
+  )
+  :get_only
+end
+
+def nova_target_build_path
+  nova_release_path("logs", "target-build.json")
+end
+
+def nova_target_build!
+  if File.exist?(nova_target_build_path) || File.symlink?(nova_target_build_path)
+    return NovaStationPinballReleaseSupport.read_target_build!(
+      path: nova_target_build_path, version: nova_config.fetch("version")
+    )
+  end
+  command = [
+    RbConfig.ruby,
+    File.join(nova_app_root, "scripts/app_store/next_build_number.rb"),
+    "--bundle-id", NOVA_BUNDLE_ID,
+    "--version", nova_config.fetch("version"),
+    "--key-path", nova_asc_key_path!
+  ]
+  stdout, stderr, status = Open3.capture3(*command)
+  UI.user_error!("Could not read the next ASC build: #{stderr.strip}") unless
+    status.success?
+  target = JSON.parse(stdout)
+  NovaStationPinballReleaseSupport.write_target_build_once!(
+    path: nova_target_build_path,
+    version: target.fetch("version"), build: target.fetch("build")
+  )
+rescue JSON::ParserError, KeyError, ArgumentError => error
+  UI.user_error!("Invalid target build readback: #{error.message}")
+end
+
+def nova_require_wrapper_signing!
+  unless ENV["APPLE_RELEASE_CERTIFICATE_MUTATIONS"] == "forbidden"
+    UI.user_error!("build_release must run through bin/apple-release")
+  end
+  identity = ENV["APPLE_RELEASE_IDENTITY_SHA1"].to_s.upcase
+  UI.user_error!("Invalid wrapper Apple Distribution identity") unless
+    identity.match?(/\A[0-9A-F]{40}\z/)
+  xcconfig = File.expand_path(ENV["APPLE_RELEASE_XCCONFIG_FILE"].to_s)
+  unless xcconfig.start_with?("/private/tmp/apps-factory/") &&
+         File.file?(xcconfig) && !File.symlink?(xcconfig)
+    UI.user_error!("Missing wrapper-owned release xcconfig")
+  end
+  { identity: identity, xcconfig: xcconfig }
+end
+
+def nova_verify_ipa!(path, target)
+  payloads = []
+  storekit = []
+  Zip::File.open(path) do |archive|
+    archive.each do |entry|
+      payloads << entry if entry.name.match?(%r{\APayload/[^/]+\.app/Info\.plist\z})
+      storekit << entry.name if entry.name.end_with?(".storekit")
+    end
+  end
+  UI.user_error!("IPA must contain one top-level app Info.plist") unless
+    payloads.length == 1
+  UI.user_error!("IPA embeds a development StoreKit configuration") unless
+    storekit.empty?
+  plist = CFPropertyList::List.new(data: payloads.first.get_input_stream.read)
+  info = CFPropertyList.native_types(plist.value)
+  expected = {
+    "CFBundleIdentifier" => NOVA_BUNDLE_ID,
+    "CFBundleShortVersionString" => target.fetch("version"),
+    "CFBundleVersion" => target.fetch("build"),
+    "ITSAppUsesNonExemptEncryption" => false
+  }
+  expected.each do |key, value|
+    unless info[key] == value
+      UI.user_error!("IPA #{key} mismatch: expected #{value.inspect}, got #{info[key].inspect}")
+    end
+  end
+  Digest::SHA256.file(path).hexdigest
+rescue Zip::Error, CFPropertyList::CFPropertyListError => error
+  UI.user_error!("Invalid IPA: #{error.message}")
+end
+
+def nova_single_ipa!
+  candidates = Dir.glob(nova_release_path("archives", "**", "*.ipa"))
+  regular = candidates.select { |path| File.file?(path) && !File.symlink?(path) }
+  unless candidates.length == 1 && regular.length == 1
+    UI.user_error!("Release run must contain exactly one regular IPA")
+  end
+  regular.first
+end
 
 platform :ios do
+  desc "Verify that the ASC app record already matches the app-local contract"
   lane :setup_asc do
-    UI.message("ASC setup is intentionally deferred to an explicit release task.")
+    nova_run_asc_tool("setup_asc")
   end
 
+  desc "Validate the complete app-local release contract without ASC mutations"
   lane :release_contract do
-    sh(RbConfig.ruby, File.expand_path("../scripts/release_contract.rb", __dir__))
+    sh(RbConfig.ruby, File.join(nova_app_root, "scripts/release_contract.rb"), "--check")
+    %w[
+      fastlane/release_support_test.rb
+      scripts/app_store/wait_for_state_test.rb
+      scripts/app_store/release_pipeline_contract_test.rb
+    ].each do |relative|
+      sh(
+        "/usr/bin/env", "-u", "RUBYOPT", "-u", "RUBYLIB",
+        "-u", "BUNDLE_GEMFILE", "-u", "GEM_HOME", "-u", "GEM_PATH",
+        "/usr/bin/ruby",
+        File.join(nova_app_root, relative)
+      )
+    end
   end
 
+  desc "Read version, metadata, COMPLETE media, exact build, free price, tips and submission"
   lane :asc_status do
-    UI.message("ASC status is intentionally deferred to an explicit release task.")
+    nova_run_asc_tool(
+      "status", "--bundle-id", NOVA_BUNDLE_ID,
+      "--version", nova_config.fetch("version")
+    )
   end
 
+  desc "Upload the frozen English and French metadata exactly once"
   lane :metadata do
-    release_contract
-    UI.message("Bilingual app-local metadata passed the release contract.")
+    nova_prepare_paths!
+    api_key = nova_load_api_key
+    metadata_payload = nova_metadata_payload
+    upload_proof = nova_mutation_proof("metadata", metadata_payload)
+    nova_transport_once(upload_proof) do
+      upload_to_app_store(
+        api_key: api_key,
+        app_identifier: NOVA_BUNDLE_ID,
+        app_version: nova_config.fetch("version"),
+        metadata_path: File.join(__dir__, "metadata"),
+        app_rating_config_path: File.join(__dir__, "metadata", "app_rating_config.json"),
+        skip_binary_upload: true,
+        skip_screenshots: true,
+        submit_for_review: false,
+        automatic_release: true,
+        force: true,
+        run_precheck_before_submit: false,
+        precheck_include_in_app_purchases: false,
+        submission_information: {
+          export_compliance_uses_encryption: false,
+          content_rights_contains_third_party_content: false
+        }
+      )
+    end
+    nova_wait_for_state!("metadata", timeout: 900)
+    NovaStationPinballReleaseSupport.mark_observed!(**upload_proof)
   end
 
+  desc "Generate the exact 36 localized screenshots from the six owned previews"
   lane :screenshots do
-    run_id = nova_media_run_id!
+    nova_prepare_paths!
+    nova_generate_app_previews_if_missing!
     sh(
       RbConfig.ruby,
-      File.expand_path("../scripts/app_store/generate_screenshots.rb", __dir__),
-      "--run-id", run_id,
+      File.join(nova_app_root, "scripts/app_store/generate_screenshots.rb"),
+      "--run-id", nova_media_run_id!,
       *nova_media_generation_arguments
     )
   end
 
+  desc "Generate the exact six localized gameplay App Previews"
   lane :app_previews do
-    run_id = nova_media_run_id!
-    sh(
-      RbConfig.ruby,
-      File.expand_path("../scripts/app_store/generate_app_previews.rb", __dir__),
-      "--run-id", run_id,
-      *nova_media_generation_arguments
-    )
+    nova_prepare_paths!
+    nova_generate_app_previews_if_missing!
   end
 
+  desc "Validate the exact EN/FR, three-device screenshot and preview matrix"
   lane :media_contract do
-    run_id = nova_media_run_id!
+    nova_prepare_paths!
     sh(
       RbConfig.ruby,
-      File.expand_path("../scripts/app_store/media_contract.rb", __dir__),
-      "--run-root", nova_media_run_root(run_id)
+      File.join(nova_app_root, "scripts/app_store/media_contract.rb"),
+      "--run-root", nova_release_root
     )
   end
 
+  desc "Upload the frozen 36 screenshots exactly once and poll COMPLETE via GET"
   lane :upload_screenshots do
     media_contract
-    UI.message("Screenshot upload requires an explicit release task.")
+    api_key = nova_load_api_key
+    screenshots_path = nova_release_path("screenshots")
+    media_payload = NovaStationPinballReleaseSupport.tree_payload!(
+      path: screenshots_path,
+      extensions: %w[.png .jpg .jpeg], expected_count: NOVA_SCREENSHOT_COUNT
+    )
+    upload_proof = nova_mutation_proof("screenshots", media_payload)
+    nova_transport_once(upload_proof) do
+      upload_to_app_store(
+        api_key: api_key,
+        app_identifier: NOVA_BUNDLE_ID,
+        app_version: nova_config.fetch("version"),
+        screenshots_path: screenshots_path,
+        skip_binary_upload: true,
+        skip_metadata: true,
+        overwrite_screenshots: true,
+        force: true,
+        run_precheck_before_submit: false
+      )
+    end
+    nova_wait_for_state!("screenshots", timeout: 1_200)
+    NovaStationPinballReleaseSupport.mark_observed!(**upload_proof)
   end
 
+  desc "Upload the frozen six App Previews exactly once and poll COMPLETE via GET"
   lane :upload_previews do
     media_contract
-    UI.message("Preview upload requires an explicit release task.")
+    api_key = nova_load_api_key
+    previews_path = nova_release_path("app_previews")
+    media_payload = NovaStationPinballReleaseSupport.tree_payload!(
+      path: previews_path,
+      extensions: %w[.mov .mp4], expected_count: NOVA_PREVIEW_COUNT
+    )
+    upload_proof = nova_mutation_proof("previews", media_payload)
+    nova_transport_once(upload_proof) do
+      upload_to_app_store(
+        api_key: api_key,
+        app_identifier: NOVA_BUNDLE_ID,
+        app_version: nova_config.fetch("version"),
+        app_previews_path: previews_path,
+        skip_binary_upload: true,
+        skip_screenshots: true,
+        skip_metadata: true,
+        overwrite_preview_videos: true,
+        preview_frame_time_code: "00:00:05:00",
+        force: true,
+        run_precheck_before_submit: false
+      )
+    end
+    nova_wait_for_state!("previews", timeout: 1_800)
+    NovaStationPinballReleaseSupport.mark_observed!(**upload_proof)
   end
 
+  desc "Archive one signed, frozen App Store IPA using the wrapper-owned identity"
   lane :build_release do
-    UI.message("Signed builds require the portfolio release launcher.")
+    nova_prepare_paths!
+    signing = nova_require_wrapper_signing!
+    target = nova_target_build!
+    ipa_path = nova_release_path("archives", "#{NOVA_APP_SLUG}.ipa")
+    archive_path = nova_release_path("archives", "#{NOVA_APP_SLUG}.xcarchive")
+    if File.exist?(ipa_path) || File.exist?(archive_path)
+      unless File.file?(ipa_path) && !File.symlink?(ipa_path) &&
+             File.directory?(archive_path) && !File.symlink?(archive_path)
+        UI.user_error!("Partial release archive exists; preserve it and diagnose before retrying")
+      end
+      nova_verify_ipa!(ipa_path, target)
+      next
+    end
+    build_app(
+      project: NOVA_PROJECT,
+      scheme: NOVA_SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: nova_release_path("archives"),
+      output_name: "#{NOVA_APP_SLUG}.ipa",
+      archive_path: archive_path,
+      derived_data_path: nova_scratch_path("derived-data"),
+      buildlog_path: nova_release_path("logs"),
+      xcconfig: signing.fetch(:xcconfig),
+      xcargs: [
+        "MARKETING_VERSION=#{target.fetch('version')}",
+        "CURRENT_PROJECT_VERSION=#{target.fetch('build')}",
+        "CODE_SIGN_STYLE=Manual",
+        "DEVELOPMENT_TEAM=#{NOVA_TEAM_ID}",
+        "CODE_SIGN_IDENTITY=#{signing.fetch(:identity)}",
+        "PROVISIONING_PROFILE_SPECIFIER=#{NOVA_PROFILE_NAME.shellescape}"
+      ].join(" "),
+      export_options: {
+        method: "app-store-connect",
+        signingStyle: "manual",
+        teamID: NOVA_TEAM_ID,
+        signingCertificate: signing.fetch(:identity),
+        provisioningProfiles: { NOVA_BUNDLE_ID => NOVA_PROFILE_NAME }
+      }
+    )
+    digest = nova_verify_ipa!(ipa_path, target)
+    File.write(
+      nova_release_path("logs", "release-manifest.json"),
+      JSON.pretty_generate(
+        "schema_version" => 1,
+        "candidate_id" => nova_candidate_id,
+        "version" => target.fetch("version"),
+        "build" => target.fetch("build"),
+        "ipa_sha256" => digest
+      ) + "\n",
+      mode: "wx", perm: 0o600
+    )
   end
 
+  desc "Upload the verified IPA exactly once, then poll the exact target build via GET"
   lane :upload_release do
-    UI.message("Release upload requires an explicit release task.")
+    nova_prepare_paths!
+    api_key = nova_load_api_key
+    ipa = nova_single_ipa!
+    target = NovaStationPinballReleaseSupport.read_target_build!(
+      path: nova_target_build_path, version: nova_config.fetch("version")
+    )
+    binary_payload = NovaStationPinballReleaseSupport.file_payload!(
+      path: ipa,
+      expected_sha256: ENV.fetch("APPLE_RELEASE_EXPECTED_IPA_SHA256")
+    ).merge("build" => target.fetch("build"))
+    upload_proof = nova_mutation_proof("ipa", binary_payload)
+    nova_transport_once(upload_proof) do
+      upload_to_app_store(
+        api_key: api_key,
+        app_identifier: NOVA_BUNDLE_ID,
+        app_version: target.fetch("version"),
+        ipa: ipa,
+        skip_screenshots: true,
+        skip_metadata: true,
+        force: true,
+        run_precheck_before_submit: false
+      )
+    end
+    nova_wait_for_state!("build", timeout: 1_800)
+    NovaStationPinballReleaseSupport.mark_observed!(**upload_proof)
   end
 
+  desc "Submit the exact selected build and reviewable tip versions at most once"
   lane :submit_review do
-    UI.message("Review submission requires an explicit release task.")
+    nova_run_asc_tool(
+      "review_submission",
+      "--bundle-id", NOVA_BUNDLE_ID,
+      "--version", nova_config.fetch("version"),
+      "--submit"
+    )
+    nova_wait_for_state!("submitted", timeout: 600)
   end
 
+  desc "Checkpointed full release entry point"
   lane :release_quick do
-    release_contract
-    media_contract
-    UI.message("Release execution is intentionally deferred to the portfolio launcher.")
+    UI.user_error!("release_quick is disabled; the checkpointed command runs media_contract. Use bin/apple-release release NovaStationPinball")
   end
 
+  desc "Read and enforce the exact free FRA/EUR price without implicit mutation"
   lane :pricing do
-    UI.message("Pricing remains free upfront; no ASC mutation is performed.")
+    nova_run_asc_tool("pricing", "--bundle-id", NOVA_BUNDLE_ID)
   end
 
+  desc "Read and enforce exactly the three optional consumable tips"
   lane :iap_status do
-    UI.message("IAP status is intentionally deferred to an explicit release task.")
+    nova_run_asc_tool("iap_status", "--bundle-id", NOVA_BUNDLE_ID)
   end
 
+  desc "Fail closed for IAP mutation; setup must be an explicitly authorized task"
   lane :iap_sync do
-    UI.message("IAP synchronization requires an explicit release task.")
+    nova_run_asc_tool("iap_sync", "--bundle-id", NOVA_BUNDLE_ID)
   end
 end

@@ -1,0 +1,7 @@
+{
+  "name": "clean-deterministic-preview",
+  "frame_count": 720,
+  "frame_rate": 30,
+  "default_top_band_yavg": 46.0,
+  "spans": []
+}

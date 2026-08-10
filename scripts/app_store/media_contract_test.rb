@@ -22,6 +22,7 @@ require REENCODE_IMPLEMENTATION if File.file?(REENCODE_IMPLEMENTATION)
 
 class NovaStationMediaContractTest < Minitest::Test
   SOURCE_REVISION = "7f9f56f2d5cb2c4c16f95d95781357c52b7715e07d87ac35d8e7be8d7da86373"
+  OVERLAY_FIXTURE_ROOT = File.expand_path("fixtures", __dir__)
 
   FakeProbe = Struct.new(:calls, :overrides) do
     def probe(path)
@@ -34,6 +35,9 @@ class NovaStationMediaContractTest < Minitest::Test
         "width" => device.fetch(:preview_width),
         "height" => device.fetch(:preview_height),
         "duration" => 24.0,
+        "video_duration" => 24.0,
+        "audio_duration" => 24.0,
+        "video_frames" => 720,
         "frame_rate" => 30.0,
         "video_codec" => "h264",
         "video_profile" => "High",
@@ -56,6 +60,30 @@ class NovaStationMediaContractTest < Minitest::Test
   FakeVisualProbe = Struct.new(:overrides) do
     def probe(_path)
       { "width_ratio" => 1.0, "height_ratio" => 1.0 }.merge(overrides || {})
+    end
+  end
+
+  FakeOverlayGuard = Struct.new(:calls) do
+    def validate!(path:, report_path:)
+      calls << { path: path, report_path: report_path }
+      { "status" => "pass", "scanned_frame_count" => 720 }
+    end
+  end
+
+  RejectingOverlayGuard = Struct.new(:message) do
+    def validate!(path:, report_path:)
+      raise NovaStationPinballMediaContract::ContractError,
+            "#{message}: #{File.basename(path)} -> #{File.basename(report_path)}"
+    end
+  end
+
+
+  FakeCommandStatus = Struct.new(:success?)
+
+  OverlayScanRunner = Struct.new(:stdout, :stderr, :status, :calls) do
+    def capture3(*arguments)
+      calls << arguments
+      [stdout, stderr, status]
     end
   end
 
@@ -123,7 +151,7 @@ class NovaStationMediaContractTest < Minitest::Test
 
     with_owned_pool do |pool_path, lease_paths, execution_id|
       configuration = NovaStationPinballMediaGeneration::Configuration.new(
-        locales: ["fr-FR"], execution_id: execution_id,
+        locales: %w[en-US fr-FR], execution_id: execution_id,
         pool_config_path: pool_path, lease_paths: lease_paths
       )
       screenshot = configuration.xcodebuild_arguments(
@@ -139,10 +167,15 @@ class NovaStationMediaContractTest < Minitest::Test
                     configuration.respond_to?(:test_without_building_arguments)
 
       preview_build = configuration.build_for_testing_arguments(
-        kind: :app_previews, locale: "fr-FR", device: "ipad-pro-13-m5", run_root: "/ignored"
+        kind: :app_previews, device: "ipad-pro-13-m5", run_root: "/ignored"
       )
       assert_includes preview_build, "generic/platform=iOS Simulator"
       assert_includes preview_build, "build-for-testing"
+      preview_build_derived_data = preview_build.fetch(preview_build.index("-derivedDataPath") + 1)
+      assert_equal File.join(
+        "/private/tmp/apps-factory/NovaStationPinball", execution_id,
+        "app_previews", "canonical", "ipad-pro-13-m5", "DerivedData"
+      ), preview_build_derived_data
       refute preview_build.any? { |argument| argument.include?("33333333-3333-3333-3333-333333333333") }
 
       preview_test = configuration.test_without_building_arguments(
@@ -154,6 +187,17 @@ class NovaStationMediaContractTest < Minitest::Test
       assert_includes preview_test, "/isolated/NovaStationPinball.xctestrun"
       assert_includes preview_test, "platform=iOS Simulator,id=33333333-3333-3333-3333-333333333333"
       assert_includes preview_test, "-only-testing:NovaStationPinballUITests/AppPreviewUITests"
+      assert_equal preview_build_derived_data,
+                   preview_test.fetch(preview_test.index("-derivedDataPath") + 1)
+
+      english_test = configuration.test_without_building_arguments(
+        kind: :app_previews, locale: "en-US", device: "ipad-pro-13-m5", run_root: "/ignored",
+        xctestrun: "/isolated/en/NovaStationPinball.xctestrun"
+      )
+      assert_equal preview_build_derived_data,
+                   english_test.fetch(english_test.index("-derivedDataPath") + 1)
+      refute_equal preview_test.fetch(preview_test.index("-resultBundlePath") + 1),
+                   english_test.fetch(english_test.index("-resultBundlePath") + 1)
     end
   end
 
@@ -200,10 +244,13 @@ class NovaStationMediaContractTest < Minitest::Test
       assert_equal "preserved", ui.fetch("EnvironmentVariables").fetch("EXISTING")
       assert_equal token, ui.fetch("EnvironmentVariables").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN")
       assert_equal "en-US", ui.fetch("EnvironmentVariables").fetch("NOVA_MEDIA_LOCALE")
+      assert_equal token, ui.fetch("TestingEnvironmentVariables").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN")
+      assert_equal "en-US", ui.fetch("TestingEnvironmentVariables").fetch("NOVA_MEDIA_LOCALE")
       assert_equal true, ui.fetch("EnvironmentVariablesEnabled").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN")
       assert_includes ui.fetch("TestBundlePath"), products
       refute_includes ui.fetch("TestBundlePath"), "__TESTROOT__"
       refute_equal File.binread(source), File.binread(destination)
+      assert_equal 0o600, File.stat(destination).mode & 0o777
     end
   end
 
@@ -244,6 +291,171 @@ class NovaStationMediaContractTest < Minitest::Test
         "NOVA_MEDIA_HANDSHAKE_TOKEN" => token, "NOVA_MEDIA_LOCALE" => "de-DE"
       )
     end
+  end
+
+  def test_app_preview_generator_builds_once_per_device_then_runs_en_and_fr_from_the_same_artifacts
+    devices = {
+      "iphone-17-pro-max" => "11111111-1111-1111-1111-111111111111",
+      "iphone-se-3" => "22222222-2222-2222-2222-222222222222",
+      "ipad-pro-13-m5" => "33333333-3333-3333-3333-333333333333"
+    }
+    configuration = Object.new
+    configuration.define_singleton_method(:udids) { devices }
+    configuration.define_singleton_method(:locales) { %w[en-US fr-FR] }
+    configuration.define_singleton_method(:assert_owned!) { true }
+
+    generator_class = Class.new(NovaStationPinballPreviewGeneration::Generator) do
+      attr_reader :events
+
+      def seed(configuration)
+        @configuration = configuration
+        @run_root = "/private/tmp/nova-preview-orchestration"
+        @events = []
+        self
+      end
+
+      def prepare_only!
+        events << :prepare_manifest
+      end
+
+      def prepare_canonical_test_artifacts!(device)
+        events << [:build, device]
+        "canonical-#{device}"
+      end
+
+      def boot_owned_simulator!(udid)
+        events << [:boot, udid]
+      end
+
+      def generate_locale!(locale, device, canonical)
+        events << [:test, locale, device, canonical]
+      end
+
+      def shutdown_owned_simulator!(udid)
+        events << [:shutdown, udid]
+      end
+    end
+    generator = generator_class.allocate.seed(configuration)
+
+    assert_equal "/private/tmp/nova-preview-orchestration", generator.generate!
+    devices.each do |device, udid|
+      assert_equal 1, generator.events.count { |event| event == [:build, device] }
+      build_index = generator.events.index([:build, device])
+      english_index = generator.events.index([:test, "en-US", device, "canonical-#{device}"])
+      french_index = generator.events.index([:test, "fr-FR", device, "canonical-#{device}"])
+      shutdown_index = generator.events.index([:shutdown, udid])
+      assert_operator build_index, :<, english_index
+      assert_operator english_index, :<, french_index
+      assert_operator french_index, :<, shutdown_index
+    end
+    source = File.read(PREVIEW_IMPLEMENTATION, encoding: "UTF-8")
+    refute_match(/runner\.capture\(\s*"xcrun",\s*"simctl",\s*"(?:install|uninstall)"/m, source)
+  end
+
+  def test_app_preview_generator_stops_on_first_locale_failure_and_still_shuts_down_owned_device
+    devices = {
+      "iphone-17-pro-max" => "11111111-1111-1111-1111-111111111111",
+      "iphone-se-3" => "22222222-2222-2222-2222-222222222222"
+    }
+    configuration = Object.new
+    configuration.define_singleton_method(:udids) { devices }
+    configuration.define_singleton_method(:locales) { %w[en-US fr-FR] }
+    configuration.define_singleton_method(:assert_owned!) { true }
+
+    generator_class = Class.new(NovaStationPinballPreviewGeneration::Generator) do
+      attr_reader :events
+
+      def seed(configuration)
+        @configuration = configuration
+        @run_root = "/private/tmp/nova-preview-fail-fast"
+        @events = []
+        self
+      end
+
+      def prepare_only!
+        events << :prepare_manifest
+      end
+
+      def prepare_canonical_test_artifacts!(device)
+        events << [:build, device]
+        "canonical-#{device}"
+      end
+
+      def boot_owned_simulator!(udid)
+        events << [:boot, udid]
+      end
+
+      def generate_locale!(locale, device, _canonical)
+        events << [:test, locale, device]
+        raise NovaStationPinballMediaContract::ContractError, "first red" if locale == "fr-FR"
+      end
+
+      def shutdown_owned_simulator!(udid)
+        events << [:shutdown, udid]
+      end
+    end
+    generator = generator_class.allocate.seed(configuration)
+
+    error = assert_raises(NovaStationPinballMediaContract::ContractError) { generator.generate! }
+    assert_equal "first red", error.message
+    assert_includes generator.events, [:test, "en-US", "iphone-17-pro-max"]
+    assert_includes generator.events, [:test, "fr-FR", "iphone-17-pro-max"]
+    assert_includes generator.events, [:shutdown, devices.fetch("iphone-17-pro-max")]
+    refute_includes generator.events, [:build, "iphone-se-3"]
+  end
+
+  def test_app_preview_locale_copies_share_canonical_products_but_have_distinct_exact_tokens
+    Dir.mktmpdir("nova-canonical-xctestrun", "/private/tmp") do |root|
+      canonical_products = File.join(root, "canonical", "DerivedData", "Build", "Products")
+      FileUtils.mkdir_p(canonical_products)
+      source = File.join(canonical_products, "NovaStationPinball.xctestrun")
+      write_plist(source, {
+        "NovaStationPinballUITests" => {
+          "BlueprintName" => "NovaStationPinballUITests",
+          "TestBundlePath" => "__TESTROOT__/Debug-iphonesimulator/NovaStationPinballUITests-Runner.app/PlugIns/NovaStationPinballUITests.xctest"
+        }
+      })
+      configurator = NovaStationPinballMediaGeneration::XCTestRunConfigurator.new
+      configured = {
+        "en-US" => ["a" * 32, File.join(root, "en-US", "xctestrun", "Nova.xctestrun")],
+        "fr-FR" => ["b" * 32, File.join(root, "fr-FR", "xctestrun", "Nova.xctestrun")]
+      }
+      payloads = configured.to_h do |locale, (token, destination)|
+        configurator.inject_environment!(
+          source: source, destination: destination, isolation_root: File.join(root, locale),
+          target_name: "NovaStationPinballUITests",
+          environment: { "NOVA_MEDIA_HANDSHAKE_TOKEN" => token, "NOVA_MEDIA_LOCALE" => locale }
+        )
+        assert_equal 0o600, File.stat(destination).mode & 0o777
+        [locale, read_plist(destination).fetch("NovaStationPinballUITests")]
+      end
+
+      english = payloads.fetch("en-US")
+      french = payloads.fetch("fr-FR")
+      assert_equal english.fetch("TestBundlePath"), french.fetch("TestBundlePath")
+      assert_includes english.fetch("TestBundlePath"), canonical_products
+      assert_equal "a" * 32, english.fetch("EnvironmentVariables").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN")
+      assert_equal "b" * 32, french.fetch("EnvironmentVariables").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN")
+      refute_equal english.fetch("EnvironmentVariables").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN"),
+                   french.fetch("EnvironmentVariables").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN")
+      configured.each do |locale, (token, _destination)|
+        payload = payloads.fetch(locale)
+        assert_equal token, payload.fetch("TestingEnvironmentVariables").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN")
+        assert_equal locale, payload.fetch("TestingEnvironmentVariables").fetch("NOVA_MEDIA_LOCALE")
+        assert_equal true, payload.fetch("EnvironmentVariablesEnabled").fetch("NOVA_MEDIA_HANDSHAKE_TOKEN")
+        assert_equal true, payload.fetch("EnvironmentVariablesEnabled").fetch("NOVA_MEDIA_LOCALE")
+      end
+    end
+  end
+
+  def test_app_preview_generator_allocates_a_distinct_handshake_token_per_locale_capture
+    generator = NovaStationPinballPreviewGeneration::Generator.allocate
+    generator.instance_variable_set(:@runner, Object.new)
+    tokens = 6.times.map do
+      generator.send(:handshake_for, "11111111-1111-1111-1111-111111111111").token
+    end
+    assert_equal 6, tokens.uniq.length
+    assert tokens.all? { |token| token.match?(/\A[0-9a-f]{32}\z/) }
   end
 
   def test_generation_rejects_wrong_pool_model_runtime_udid_and_symlinked_lock
@@ -292,14 +504,100 @@ class NovaStationMediaContractTest < Minitest::Test
       assert_equal value, arguments[index + 1]
     end
     assert_includes arguments.fetch(arguments.index("-vf") + 1), "fps=30"
+    assert_includes arguments.fetch(arguments.index("-vf") + 1), "tpad=stop_mode=clone:stop_duration=0.000000"
+    assert_includes arguments.fetch(arguments.index("-vf") + 1), "trim=end_frame=720"
+    assert_includes arguments.fetch(arguments.index("-vf") + 1), "setpts=N/(30*TB)"
     assert_includes arguments.fetch(arguments.index("-vf") + 1), "setfield=prog"
+    assert_equal "720", arguments.fetch(arguments.index("-frames:v") + 1)
+    assert_equal "atrim=duration=24,asetpts=N/SR/TB", arguments.fetch(arguments.index("-af") + 1)
+    refute_includes arguments, "-shortest"
     assert_match(/\Atranspose=clock,scale=1920:886:/, arguments.fetch(arguments.index("-vf") + 1))
     se_arguments = NovaStationPinballPreviewGeneration::Encoding.arguments(
       source: "/tmp/raw.mov", destination: "/tmp/se.mov", width: 1_334, height: 750,
-      trim_offset: 0.25, transform: "transpose=cclock"
+      trim_offset: 0.25, transform: "transpose=clock"
     )
-    assert_match(/\Atranspose=cclock,scale=1334:750:/,
+    assert_match(/\Atranspose=clock,scale=1334:750:/,
                  se_arguments.fetch(se_arguments.index("-vf") + 1))
+    assert NovaStationPinballMediaContract::DEVICES.all? { |device| device.fetch(:raw_transform) == "transpose=clock" }
+  end
+
+  def test_system_overlay_guard_accepts_the_clean_720_frame_fixture_and_writes_a_0600_report
+    fixture = overlay_fixture("system_overlay_clean.json")
+    runner = OverlayScanRunner.new(
+      overlay_metadata_output(fixture), "", FakeCommandStatus.new(true), []
+    )
+    Dir.mktmpdir("nova-overlay-clean", "/private/tmp") do |root|
+      video = File.join(root, "clean.mov")
+      report_path = File.join(root, "logs", "clean.json")
+      File.binwrite(video, "clean-fixture-video")
+      report = NovaStationPinballMediaContract::SystemOverlayGuard.new(
+        runner: runner, captured_at: -> { Time.utc(2026, 8, 10, 6, 0, 0) }
+      ).validate!(path: video, report_path: report_path)
+
+      assert_equal "pass", report.fetch("status")
+      assert_equal 720, report.fetch("scanned_frame_count")
+      assert_equal 0, report.fetch("violation_count")
+      assert_equal 0o600, File.stat(report_path).mode & 0o777
+      persisted = JSON.parse(File.read(report_path, encoding: "UTF-8"))
+      assert_equal Digest::SHA256.file(video).hexdigest, persisted.fetch("video_sha256")
+      arguments = runner.calls.fetch(0)
+      assert_includes arguments, NovaStationPinballMediaContract::SystemOverlayGuard::TOP_BAND_FILTER
+      assert_equal "/dev/null", arguments.last
+    end
+  end
+
+  def test_system_overlay_guard_rejects_the_en_se_notification_from_12_466667_through_19_900000
+    fixture = overlay_fixture("system_overlay_polluted_en_se.json")
+    runner = OverlayScanRunner.new(
+      overlay_metadata_output(fixture), "", FakeCommandStatus.new(true), []
+    )
+    Dir.mktmpdir("nova-overlay-polluted", "/private/tmp") do |root|
+      video = File.join(root, "en-se.mov")
+      report_path = File.join(root, "logs", "en-se.json")
+      File.binwrite(video, "polluted-en-se-fixture-video")
+      error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+        NovaStationPinballMediaContract::SystemOverlayGuard.new(
+          runner: runner, captured_at: -> { Time.utc(2026, 8, 10, 6, 0, 0) }
+        ).validate!(path: video, report_path: report_path)
+      end
+
+      assert_includes error.message, "rejected 224 frame(s)"
+      assert_includes error.message, "PTS 12.466667-19.900000"
+      report = JSON.parse(File.read(report_path, encoding: "UTF-8"))
+      assert_equal "fail", report.fetch("status")
+      assert_equal 720, report.fetch("scanned_frame_count")
+      assert_equal 224, report.fetch("violation_count")
+      span = report.fetch("violation_spans").fetch(0)
+      assert_equal 374, span.fetch("first_frame")
+      assert_equal 597, span.fetch("last_frame")
+      assert_equal 12.466667, span.fetch("first_pts_seconds")
+      assert_equal 19.9, span.fetch("last_pts_seconds")
+      assert_equal 19.933333, span.fetch("end_pts_exclusive_seconds")
+      assert_equal 224, report.fetch("violating_frames").length
+      assert_equal 0o600, File.stat(report_path).mode & 0o777
+    end
+  end
+
+  def test_system_overlay_guard_fails_closed_when_the_scan_is_not_exhaustive
+    fixture = overlay_fixture("system_overlay_clean.json").merge("frame_count" => 719)
+    runner = OverlayScanRunner.new(
+      overlay_metadata_output(fixture), "", FakeCommandStatus.new(true), []
+    )
+    Dir.mktmpdir("nova-overlay-short", "/private/tmp") do |root|
+      video = File.join(root, "short.mov")
+      report_path = File.join(root, "logs", "short.json")
+      File.binwrite(video, "short-fixture-video")
+      error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+        NovaStationPinballMediaContract::SystemOverlayGuard.new(runner: runner).validate!(
+          path: video, report_path: report_path
+        )
+      end
+
+      assert_includes error.message, "exactly 720 sequential frames"
+      report = JSON.parse(File.read(report_path, encoding: "UTF-8"))
+      assert_equal "error", report.fetch("status")
+      assert_includes report.fetch("error"), "exactly 720 sequential frames"
+    end
   end
 
   def test_app_preview_raw_geometry_must_be_portrait_inverse_of_store_device
@@ -327,6 +625,13 @@ class NovaStationMediaContractTest < Minitest::Test
   def test_raw_preview_reuse_extracts_and_hashes_the_verified_handshake_token
     assert File.file?(REENCODE_IMPLEMENTATION), "missing raw preview reuse implementation"
     return unless defined?(NovaStationPinballPreviewReencoding)
+
+    reencoder = File.read(REENCODE_IMPLEMENTATION, encoding: "UTF-8")
+    overlay_index = reencoder.index("SystemOverlayGuard.new")
+    mark_index = reencoder.index("mark_artifact!", overlay_index || 0)
+    refute_nil overlay_index
+    refute_nil mark_index
+    assert_operator overlay_index, :<, mark_index
 
     Dir.mktmpdir do |root|
       xctestrun = File.join(root, "source.xctestrun")
@@ -365,6 +670,49 @@ class NovaStationMediaContractTest < Minitest::Test
     assert_equal "2.815", long_arguments.fetch(long_arguments.index("-ss") + 1)
   end
 
+  def test_capture_window_wait_targets_cover_the_short_en_se_and_ipad_regression
+    window = NovaStationPinballPreviewGeneration::CaptureWindow
+
+    assert_in_delta 25.792, window.minimum_raw_elapsed(0.792), 0.000_001
+    assert_in_delta 26.009, window.minimum_raw_elapsed(1.009), 0.000_001
+    assert_equal 24.0, window::TIMELINE_SECONDS
+    assert_equal 1.0, window::RAW_TAIL_MARGIN_SECONDS
+  end
+
+  def test_capture_window_refuses_the_observed_short_en_se_and_ipad_raw_segments
+    window = NovaStationPinballPreviewGeneration::CaptureWindow
+    failures = [
+      { raw_end: 24.641667, trim_offset: 0.792, deficit: "0.150" },
+      { raw_end: 24.700000, trim_offset: 1.009, deficit: "0.309" }
+    ]
+
+    failures.each do |sample|
+      error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+        window.residual_padding(raw_end: sample.fetch(:raw_end), trim_offset: sample.fetch(:trim_offset))
+      end
+      assert_includes error.message, "residual padding is limited"
+      assert_includes error.message, sample.fetch(:deficit)
+    end
+  end
+
+  def test_capture_window_allows_only_one_frame_of_residual_padding
+    window = NovaStationPinballPreviewGeneration::CaptureWindow
+
+    padding = window.residual_padding(raw_end: 24.985, trim_offset: 1.0)
+    assert_in_delta 1.0 / 30.0, padding, 0.000_001
+    assert_equal 0.0, window.residual_padding(raw_end: 25.2, trim_offset: 1.0)
+    assert_raises(NovaStationPinballMediaContract::ContractError) do
+      window.residual_padding(raw_end: 24.96, trim_offset: 1.0)
+    end
+
+    arguments = NovaStationPinballPreviewGeneration::Encoding.arguments(
+      source: "/tmp/raw.mov", destination: "/tmp/final.mov",
+      width: 1_334, height: 750, trim_offset: 1.0, padding_duration: padding
+    )
+    assert_includes arguments.fetch(arguments.index("-vf") + 1),
+                    "tpad=stop_mode=clone:stop_duration=0.033333"
+  end
+
   def test_app_preview_source_requires_ready_recording_started_and_complete_handshake
     source = File.read(PREVIEW_IMPLEMENTATION, encoding: "UTF-8")
     generation = File.read(GENERATION_IMPLEMENTATION, encoding: "UTF-8")
@@ -375,15 +723,30 @@ class NovaStationMediaContractTest < Minitest::Test
     refute_nil readiness, "recorder readiness must precede the app recording marker"
     assert_operator readiness, :<, source.index('write!("recording"')
     assert_operator source.index('write!("recording"'), :<, source.index('wait_for!("started"')
-    assert_operator source.index('wait_for!("complete"'), :<, source.index("Process.kill")
+    raw_tail_wait = source.rindex("recorder.wait_until_elapsed!")
+    assert_operator source.index('wait_for!("complete"'), :<, raw_tail_wait
+    assert_operator raw_tail_wait, :<, source.index("Process.kill")
     assert_includes source, "NOVA_MEDIA_HANDSHAKE_TOKEN"
     assert_includes source, "NOVA_MEDIA_LOCALE"
     assert_includes ui_source, '"-AppleLanguages"'
     assert_includes ui_source, '"-AppleLocale"'
+    assert_includes ui_source, 'XCUIApplication(bundleIdentifier: "com.apple.springboard")'
+    assert_includes ui_source, 'notificationIdentifier = "NotificationShortLookView"'
+    assert_includes ui_source, "initialDelaySeconds: TimeInterval = 30"
+    assert_includes ui_source, "requiredContinuousAbsenceSeconds: TimeInterval = 5"
+    assert_includes ui_source, "maximumObservationSeconds: TimeInterval = 30"
+    assert_operator ui_source.index("guard waitForSpringBoardToSettle()"), :<,
+                    ui_source.index("let app = XCUIApplication()")
     assert_includes generation, "build-for-testing"
     assert_includes generation, "test-without-building"
     refute_match(/Process\.spawn\(\s*\{\s*"NOVA_MEDIA_HANDSHAKE_TOKEN"/m, source)
     refute_includes source, '"booted"'
+    guard_index = source.index("validate_system_overlay!(destination, locale, device)")
+    mark_index = source.index("mark_artifact!", guard_index || 0)
+    refute_nil guard_index
+    refute_nil mark_index
+    assert_operator guard_index, :<, mark_index
+    assert_includes source, "timeout: 90.0"
   end
 
   def test_recorder_readiness_requires_the_exact_live_pid_and_growing_nonempty_file
@@ -433,6 +796,23 @@ class NovaStationMediaContractTest < Minitest::Test
     end
   end
 
+  def test_recorder_waits_for_the_full_raw_capture_deadline_while_its_exact_pid_is_live
+    pid = Process.spawn(RbConfig.ruby, "-e", "sleep 5", out: File::NULL, err: File::NULL)
+    readings = [100.0, 100.4, 101.0]
+    sleeps = []
+    readiness = NovaStationPinballPreviewGeneration::RecorderReadiness.new(
+      path: "/private/tmp/unused-recorder.mov", pid: pid, poll_interval: 0.5,
+      clock: -> { readings.shift || 101.0 }, sleeper: ->(duration) { sleeps << duration }
+    )
+
+    reached = readiness.wait_until_elapsed!(recording_origin: 100.0, minimum_duration: 1.0)
+
+    assert_equal 101.0, reached
+    assert_equal [0.5, 0.5], sleeps
+  ensure
+    terminate_test_process(pid)
+  end
+
   def test_app_preview_handshake_waits_for_exact_app_container_until_ready
     Dir.mktmpdir("nova-handshake") do |container|
       token = "b" * 32
@@ -459,6 +839,93 @@ class NovaStationMediaContractTest < Minitest::Test
       assert runner.calls.all? { |arguments| arguments.include?("11111111-1111-1111-1111-111111111111") }
       refute runner.calls.flatten.include?("booted")
     end
+  end
+
+  def test_app_preview_boot_waits_for_the_exact_owned_udid_to_be_ready
+    status = Struct.new(:success?)
+    runner = Struct.new(:calls, :status) do
+      def capture(*arguments)
+        calls << arguments
+        ["", "", status.new(true)]
+      end
+    end.new([], status)
+    generator = NovaStationPinballPreviewGeneration::Generator.allocate
+    generator.instance_variable_set(:@runner, runner)
+    udid = "11111111-1111-1111-1111-111111111111"
+
+    generator.send(:boot_owned_simulator!, udid)
+
+    assert_equal [
+      ["xcrun", "simctl", "boot", udid],
+      ["xcrun", "simctl", "bootstatus", udid, "-b"]
+    ], runner.calls
+    refute runner.calls.flatten.include?("booted")
+  end
+
+  def test_app_preview_boot_fails_closed_when_the_fresh_owned_device_cannot_boot
+    status = Struct.new(:success?).new(false)
+    runner = Struct.new(:calls, :status) do
+      def capture(*arguments)
+        calls << arguments
+        ["", "device was not in the expected fresh state", status]
+      end
+    end.new([], status)
+    generator = NovaStationPinballPreviewGeneration::Generator.allocate
+    generator.instance_variable_set(:@runner, runner)
+    udid = "11111111-1111-1111-1111-111111111111"
+
+    error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+      generator.send(:boot_owned_simulator!, udid)
+    end
+
+    assert_includes error.message, "could not boot owned App Preview simulator"
+    assert_equal [["xcrun", "simctl", "boot", udid]], runner.calls
+  end
+
+  def test_app_preview_shutdown_targets_only_the_owned_udid
+    status = Struct.new(:success?).new(true)
+    runner = Struct.new(:calls, :status) do
+      def capture(*arguments)
+        calls << arguments
+        ["", "", status]
+      end
+    end.new([], status)
+    generator = NovaStationPinballPreviewGeneration::Generator.allocate
+    generator.instance_variable_set(:@runner, runner)
+    udid = "11111111-1111-1111-1111-111111111111"
+
+    generator.send(:shutdown_owned_simulator!, udid)
+
+    assert_equal [["xcrun", "simctl", "shutdown", udid]], runner.calls
+  end
+
+  def test_app_preview_shutdown_accepts_an_already_stopped_owned_device
+    status = Struct.new(:success?).new(false)
+    runner = Struct.new(:status) do
+      def capture(*_arguments)
+        ["", "Unable to shutdown device in current state: Shutdown", status]
+      end
+    end.new(status)
+    generator = NovaStationPinballPreviewGeneration::Generator.allocate
+    generator.instance_variable_set(:@runner, runner)
+
+    assert_nil generator.send(:shutdown_owned_simulator!, "11111111-1111-1111-1111-111111111111")
+  end
+
+  def test_app_preview_shutdown_fails_closed_on_ambiguous_cleanup
+    status = Struct.new(:success?).new(false)
+    runner = Struct.new(:status) do
+      def capture(*_arguments)
+        ["", "CoreSimulator service unavailable", status]
+      end
+    end.new(status)
+    generator = NovaStationPinballPreviewGeneration::Generator.allocate
+    generator.instance_variable_set(:@runner, runner)
+
+    error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+      generator.send(:shutdown_owned_simulator!, "11111111-1111-1111-1111-111111111111")
+    end
+    assert_includes error.message, "could not shut down owned App Preview simulator"
   end
 
   def test_app_preview_handshake_refreshes_the_container_after_xcode_reinstalls_the_app
@@ -516,8 +983,12 @@ class NovaStationMediaContractTest < Minitest::Test
     %w[generate_screenshots.rb generate_app_previews.rb].each do |filename|
       source = File.read(File.join(__dir__, filename), encoding: "UTF-8")
       refute_includes source, "Thread.new", "#{filename} must serialize locales over the single exact UDID per device"
-      assert_includes source, "batch.each"
     end
+    screenshots = File.read(File.join(__dir__, "generate_screenshots.rb"), encoding: "UTF-8")
+    previews = File.read(PREVIEW_IMPLEMENTATION, encoding: "UTF-8")
+    assert_includes screenshots, "batch.each"
+    assert_includes previews, "configuration.udids.each_key"
+    assert_includes previews, "configuration.locales.each"
   end
 
   def test_preparation_manifest_has_the_exact_locale_device_scenario_matrix
@@ -545,7 +1016,8 @@ class NovaStationMediaContractTest < Minitest::Test
   def test_strict_contract_accepts_only_a_complete_captured_matrix_and_hashes
     require_implementation!
     with_complete_run do |run_root, probe|
-      report = contract(run_root, probe: probe).validate!
+      overlay_guard = FakeOverlayGuard.new([])
+      report = contract(run_root, probe: probe, overlay_guard: overlay_guard).validate!
 
       assert_equal 36, report.fetch("cells").length
       assert_equal 36, report.fetch("screenshots").length
@@ -553,6 +1025,8 @@ class NovaStationMediaContractTest < Minitest::Test
       assert_equal SOURCE_REVISION, report.fetch("source_revision")
       assert File.file?(File.join(run_root, "logs", "media-contract.json"))
       assert_equal 6, probe.calls.length
+      assert_equal 6, overlay_guard.calls.length
+      assert overlay_guard.calls.all? { |call| call.fetch(:report_path).include?("/logs/system-overlay/") }
     end
   end
 
@@ -564,6 +1038,20 @@ class NovaStationMediaContractTest < Minitest::Test
       end
 
       assert_includes error.message, "screenshot content coverage is too small"
+    end
+  end
+
+  def test_strict_contract_rejects_a_preview_rejected_by_the_system_overlay_guard
+    with_complete_run do |run_root, probe|
+      error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+        contract(
+          run_root, probe: probe,
+          overlay_guard: RejectingOverlayGuard.new("system UI top-band guard rejected")
+        ).validate!
+      end
+
+      assert_includes error.message, "system UI top-band guard rejected"
+      refute File.exist?(File.join(run_root, "logs", "media-contract.json"))
     end
   end
 
@@ -691,6 +1179,9 @@ class NovaStationMediaContractTest < Minitest::Test
     cases = {
       "preview dimensions mismatch" => { "width" => 1 },
       "preview duration must be exactly 24 seconds" => { "duration" => 23.7 },
+      "preview video track must be exactly 24 seconds" => { "video_duration" => 23.9 },
+      "preview audio track must be exactly 24 seconds" => { "audio_duration" => 23.9 },
+      "preview must contain exactly 720 video frames" => { "video_frames" => 719 },
       "preview frame rate must be exactly 30 fps" => { "frame_rate" => 29.0 },
       "preview video codec must be H.264" => { "video_codec" => "hevc" },
       "preview H.264 profile must be High" => { "video_profile" => "Main" },
@@ -763,9 +1254,11 @@ class NovaStationMediaContractTest < Minitest::Test
       "streams" => [
         { "codec_type" => "video", "codec_name" => "h264", "profile" => "High", "level" => 40,
           "width" => 1920, "height" => 886, "pix_fmt" => "yuv420p", "field_order" => "progressive",
-          "avg_frame_rate" => "30/1", "bit_rate" => "11000000", "disposition" => { "default" => 1 } },
+          "avg_frame_rate" => "30/1", "duration" => "24.000000", "nb_read_frames" => "720",
+          "bit_rate" => "11000000", "disposition" => { "default" => 1 } },
         { "codec_type" => "audio", "codec_name" => "aac", "profile" => "LC", "channels" => 2,
-          "sample_rate" => "48000", "bit_rate" => "256000", "disposition" => { "default" => 1 } }
+          "sample_rate" => "48000", "duration" => "24.000000", "bit_rate" => "256000",
+          "disposition" => { "default" => 1 } }
       ], "format" => { "duration" => "24.000000" }
     })
     runner = Struct.new(:stdout) do
@@ -776,6 +1269,9 @@ class NovaStationMediaContractTest < Minitest::Test
     info = NovaStationPinballMediaContract::FFProbe.new(runner: runner.new(valid_json)).probe("preview.mov")
     assert_equal 11_000_000, info.fetch("video_bit_rate")
     assert_equal 256_000, info.fetch("audio_bit_rate")
+    assert_equal 720, info.fetch("video_frames")
+    assert_equal 24.0, info.fetch("video_duration")
+    assert_equal 24.0, info.fetch("audio_duration")
 
     ["not-json", valid_json.sub('"30/1"', '"oops"'), valid_json.sub('"streams":[', '"streams":[]')].each do |payload|
       assert_raises(NovaStationPinballMediaContract::ContractError) do
@@ -883,6 +1379,25 @@ class NovaStationMediaContractTest < Minitest::Test
     CFPropertyList.native_types(CFPropertyList::List.new(file: path).value)
   end
 
+  def overlay_fixture(filename)
+    JSON.parse(File.read(File.join(OVERLAY_FIXTURE_ROOT, filename), encoding: "UTF-8"))
+  end
+
+  def overlay_metadata_output(fixture)
+    spans = fixture.fetch("spans")
+    frame_rate = Float(fixture.fetch("frame_rate"))
+    (0...Integer(fixture.fetch("frame_count"))).map do |frame|
+      span = spans.find do |candidate|
+        frame.between?(candidate.fetch("first_frame"), candidate.fetch("last_frame"))
+      end
+      yavg = span ? span.fetch("top_band_yavg") : fixture.fetch("default_top_band_yavg")
+      format(
+        "frame:%d    pts:%d       pts_time:%.6f\nlavfi.signalstats.YAVG=%.6f\n",
+        frame, frame * 512, frame / frame_rate, yavg
+      )
+    end.join
+  end
+
   def terminate_test_process(pid)
     return unless pid
     Process.kill("TERM", pid)
@@ -903,12 +1418,13 @@ class NovaStationMediaContractTest < Minitest::Test
     )
   end
 
-  def contract(run_root, probe: nil, visual_probe: nil, allow_pending: false)
+  def contract(run_root, probe: nil, visual_probe: nil, overlay_guard: nil, allow_pending: false)
     NovaStationPinballMediaContract::Contract.new(
       run_root: run_root,
       source_revision: SOURCE_REVISION,
       probe: probe || FakeProbe.new([]),
       visual_probe: visual_probe || FakeVisualProbe.new,
+      overlay_guard: overlay_guard || FakeOverlayGuard.new([]),
       allow_pending: allow_pending
     )
   end

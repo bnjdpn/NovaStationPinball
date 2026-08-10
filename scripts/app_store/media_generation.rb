@@ -33,7 +33,7 @@ module NovaStationPinballMediaGeneration
     HANDSHAKE_KEY = "NOVA_MEDIA_HANDSHAKE_TOKEN"
     LOCALE_KEY = "NOVA_MEDIA_LOCALE"
 
-    def find_and_inject!(derived_data:, destination:, isolation_root:, target_name:, environment:)
+    def find!(derived_data:)
       products = File.join(File.expand_path(derived_data), "Build", "Products")
       candidates = Dir.glob(File.join(products, "**", "*.xctestrun")).select do |path|
         File.file?(path) && !File.symlink?(path)
@@ -42,10 +42,7 @@ module NovaStationPinballMediaGeneration
         raise NovaStationPinballMediaContract::ContractError,
               "build-for-testing must produce exactly one regular xctestrun; found #{candidates.length}"
       end
-      inject_environment!(
-        source: candidates.first, destination: destination,
-        isolation_root: isolation_root, target_name: target_name, environment: environment
-      )
+      candidates.first
     end
 
     def inject_environment!(source:, destination:, isolation_root:, target_name:, environment:)
@@ -210,11 +207,11 @@ module NovaStationPinballMediaGeneration
       ]
     end
 
-    def build_for_testing_arguments(kind:, locale:, device:, run_root:)
+    def build_for_testing_arguments(kind:, device:, run_root:)
       assert_owned!
-      validate_selection!(locale, device)
+      validate_device!(device)
       suite = suite_for(kind)
-      scratch = scratch_root(run_root, locale, device, kind)
+      scratch = canonical_scratch_root(run_root, device, kind)
       FileUtils.mkdir_p(File.join(scratch, "xcresult"))
       [
         "xcodebuild",
@@ -236,11 +233,12 @@ module NovaStationPinballMediaGeneration
       validate_selection!(locale, device)
       suite = suite_for(kind)
       scratch = scratch_root(run_root, locale, device, kind)
+      canonical_derived_data = File.join(canonical_scratch_root(run_root, device, kind), "DerivedData")
       [
         "xcodebuild", "test-without-building",
         "-xctestrun", File.expand_path(xctestrun),
         "-destination", "platform=iOS Simulator,id=#{udids.fetch(device)}",
-        "-derivedDataPath", File.join(scratch, "DerivedData"),
+        "-derivedDataPath", canonical_derived_data,
         "-resultBundlePath", File.join(scratch, "xcresult", "#{suite}.xcresult"),
         "-parallel-testing-enabled", "NO",
         "-maximum-parallel-testing-workers", "1",
@@ -256,6 +254,15 @@ module NovaStationPinballMediaGeneration
       File.join(
         "/private/tmp/apps-factory/NovaStationPinball",
         execution_id, kind.to_s, locale, device
+      )
+    end
+
+    def canonical_scratch_root(run_root, device, kind)
+      validate_device!(device)
+      suite_for(kind)
+      File.join(
+        "/private/tmp/apps-factory/NovaStationPinball",
+        execution_id, kind.to_s, "canonical", device
       )
     end
 
@@ -342,6 +349,10 @@ module NovaStationPinballMediaGeneration
 
     def validate_selection!(locale, device)
       raise NovaStationPinballMediaContract::ContractError, "locale is not selected: #{locale}" unless locales.include?(locale)
+      validate_device!(device)
+    end
+
+    def validate_device!(device)
       raise NovaStationPinballMediaContract::ContractError, "unknown media device: #{device}" unless udids.key?(device)
     end
   end

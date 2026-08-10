@@ -60,6 +60,7 @@ final class AppModel {
     private var didStartOptionalServices = false
     private var gameCompletionGate = GameCompletionGate()
     private(set) var mediaScenario: MediaScenario?
+    var runsMediaPreviewSequence: Bool { mediaLaunchConfiguration.runsPreviewSequence }
 
     @ObservationIgnored lazy var scene = PinballScene(model: self)
     @ObservationIgnored lazy var lifecycleCoordinator = LifecycleCoordinator(
@@ -213,6 +214,16 @@ final class AppModel {
 
     func togglePauseFromAccessibility() {
         lifecycleCoordinator.setUserPaused(!lifecycleCoordinator.isSimulationPaused)
+    }
+
+    func beginTableGuide() {
+        lifecycleCoordinator.setTableGuidePresented(true)
+        scene.setTableGuidePresented(true)
+    }
+
+    func endTableGuide() {
+        scene.setTableGuidePresented(false)
+        lifecycleCoordinator.setTableGuidePresented(false)
     }
 
     func toggleFlipperFromAccessibility(_ side: FlipperSide) {

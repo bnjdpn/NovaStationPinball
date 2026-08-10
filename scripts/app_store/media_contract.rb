@@ -14,13 +14,14 @@ module NovaStationPinballMediaContract
   LOCALES = %w[en-US fr-FR].freeze
   SCENARIOS = %w[launch mission promotion multiball tilt game-over].freeze
   DEVICES = [
-    { id: "iphone-17-pro-max", width: 2_868, height: 1_320, preview_width: 1_920, preview_height: 886, raw_transform: "transpose=cclock" },
-    { id: "iphone-se-3", width: 1_334, height: 750, preview_width: 1_334, preview_height: 750, raw_transform: "transpose=cclock" },
+    { id: "iphone-17-pro-max", width: 2_868, height: 1_320, preview_width: 1_920, preview_height: 886, raw_transform: "transpose=clock" },
+    { id: "iphone-se-3", width: 1_334, height: 750, preview_width: 1_334, preview_height: 750, raw_transform: "transpose=clock" },
     { id: "ipad-pro-13-m5", width: 2_752, height: 2_064, preview_width: 1_600, preview_height: 1_200, raw_transform: "transpose=clock" }
   ].freeze
   PNG_SIGNATURE = "\x89PNG\r\n\x1A\n".b
   MANIFEST_PATH = "logs/media-manifest.json"
   PROOF_PATH = "logs/media-contract.json"
+  SYSTEM_OVERLAY_REPORT_ROOT = "logs/system-overlay"
 
   class ContractError < StandardError; end
 
@@ -104,6 +105,183 @@ module NovaStationPinballMediaContract
         end
       end
       candidate
+    end
+  end
+
+  class SystemOverlayGuard
+    FRAME_RATE = 30.0
+    EXPECTED_FRAME_COUNT = 720
+    TOP_BAND_FILTER =
+      "crop=iw*0.75:ih*0.20:iw*0.125:0,signalstats," \
+      "metadata=print:key=lavfi.signalstats.YAVG:file=-"
+    MAX_TOP_BAND_YAVG = 64.0
+    TIMESTAMP_TOLERANCE_SECONDS = 0.000_01
+
+    def self.report_path(run_root:, locale:, device:)
+      unless LOCALES.include?(locale) && DEVICES.any? { |candidate| candidate.fetch(:id) == device }
+        raise ContractError, "invalid system-overlay report identity"
+      end
+      Paths.inside!(run_root, File.join(SYSTEM_OVERLAY_REPORT_ROOT, "#{locale}-#{device}.json"))
+    end
+
+    def initialize(executable: "/opt/homebrew/bin/ffmpeg", runner: Open3, captured_at: nil)
+      @executable = executable
+      @runner = runner
+      @captured_at = captured_at || -> { Time.now.utc }
+    end
+
+    def validate!(path:, report_path:)
+      video_path = File.expand_path(path)
+      report_path = File.expand_path(report_path)
+      report_written = false
+      unless File.file?(video_path) && !File.symlink?(video_path)
+        message = "system-overlay guard input must be a regular non-symlink file"
+        write_report!(report_path, failure_report(video_path, message))
+        report_written = true
+        raise ContractError, message
+      end
+
+      stdout, stderr, status = capture(
+        @executable, "-hide_banner", "-v", "error", "-i", video_path,
+        "-vf", TOP_BAND_FILTER, "-an", "-f", "null", "/dev/null"
+      )
+      unless status.success?
+        message = "system-overlay guard scan failed: #{stderr.to_s.strip}"
+        write_report!(report_path, failure_report(video_path, message))
+        report_written = true
+        raise ContractError, message
+      end
+
+      frames = parse_frames!(stdout)
+      violations = frames.select { |frame| frame.fetch("top_band_yavg") >= MAX_TOP_BAND_YAVG }
+      report = {
+        "schema_version" => 1,
+        "status" => violations.empty? ? "pass" : "fail",
+        "generated_at" => @captured_at.call.utc.iso8601(6),
+        "video_path" => video_path,
+        "video_sha256" => Digest::SHA256.file(video_path).hexdigest,
+        "expected_frame_count" => EXPECTED_FRAME_COUNT,
+        "scanned_frame_count" => frames.length,
+        "frame_rate" => FRAME_RATE,
+        "top_band" => {
+          "x_ratio" => 0.125, "y_ratio" => 0.0,
+          "width_ratio" => 0.75, "height_ratio" => 0.20,
+          "metric" => "lavfi.signalstats.YAVG",
+          "reject_at_or_above" => MAX_TOP_BAND_YAVG
+        },
+        "violation_count" => violations.length,
+        "violation_spans" => violation_spans(violations),
+        "violating_frames" => violations
+      }
+      write_report!(report_path, report)
+      report_written = true
+      return report if violations.empty?
+
+      first = violations.first
+      last = violations.last
+      raise ContractError,
+            format(
+              "system UI top-band guard rejected %d frame(s), PTS %.6f-%.6f; inspect %s",
+              violations.length, first.fetch("pts_seconds"), last.fetch("pts_seconds"), report_path
+            )
+    rescue ContractError => error
+      unless report_written
+        write_report!(report_path, failure_report(video_path, error.message))
+      end
+      raise
+    rescue StandardError => error
+      message = "system-overlay guard failed closed: #{error.class}: #{error.message}"
+      write_report!(report_path, failure_report(video_path, message)) unless report_written
+      raise ContractError, message
+    end
+
+    private
+
+    def capture(*arguments)
+      return @runner.capture3(*arguments) if @runner.respond_to?(:capture3)
+      return @runner.capture(*arguments) if @runner.respond_to?(:capture)
+
+      raise ContractError, "system-overlay guard runner cannot capture commands"
+    end
+
+    def parse_frames!(output)
+      frames = []
+      current = nil
+      output.to_s.each_line do |line|
+        if (match = line.match(/\Aframe:(\d+)\s+pts:\S+\s+pts_time:([-+0-9.eE]+)\s*\z/))
+          raise ContractError, "system-overlay scan omitted a frame metric" if current
+          current = { "frame" => Integer(match[1], 10), "pts_seconds" => Float(match[2]) }
+        elsif (match = line.match(/\Alavfi\.signalstats\.YAVG=([-+0-9.eE]+)\s*\z/))
+          raise ContractError, "system-overlay scan returned an orphan frame metric" unless current
+          value = Float(match[1])
+          raise ContractError, "system-overlay scan returned a non-finite metric" unless value.finite?
+          frames << current.merge("top_band_yavg" => value.round(6))
+          current = nil
+        end
+      end
+      raise ContractError, "system-overlay scan omitted a frame metric" if current
+      unless frames.length == EXPECTED_FRAME_COUNT && frames.map { |frame| frame.fetch("frame") } == (0...EXPECTED_FRAME_COUNT).to_a
+        raise ContractError,
+              "system-overlay scan must cover exactly 720 sequential frames"
+      end
+      frames.each do |frame|
+        expected = frame.fetch("frame") / FRAME_RATE
+        unless (frame.fetch("pts_seconds") - expected).abs <= TIMESTAMP_TOLERANCE_SECONDS
+          raise ContractError, "system-overlay scan returned an irregular frame timeline"
+        end
+        frame["pts_seconds"] = frame.fetch("pts_seconds").round(6)
+      end
+      frames
+    rescue ArgumentError, TypeError
+      raise ContractError, "system-overlay scan returned invalid frame metadata"
+    end
+
+    def violation_spans(violations)
+      violations.slice_when do |left, right|
+        right.fetch("frame") != left.fetch("frame") + 1
+      end.map do |span|
+        first = span.first
+        last = span.last
+        {
+          "first_frame" => first.fetch("frame"),
+          "last_frame" => last.fetch("frame"),
+          "first_pts_seconds" => first.fetch("pts_seconds"),
+          "last_pts_seconds" => last.fetch("pts_seconds"),
+          "end_pts_exclusive_seconds" => ((last.fetch("frame") + 1) / FRAME_RATE).round(6),
+          "frame_count" => span.length,
+          "max_top_band_yavg" => span.map { |frame| frame.fetch("top_band_yavg") }.max
+        }
+      end
+    end
+
+    def failure_report(video_path, message)
+      {
+        "schema_version" => 1,
+        "status" => "error",
+        "generated_at" => @captured_at.call.utc.iso8601(6),
+        "video_path" => video_path,
+        "expected_frame_count" => EXPECTED_FRAME_COUNT,
+        "scanned_frame_count" => 0,
+        "error" => message
+      }
+    end
+
+    def write_report!(path, payload)
+      if File.exist?(path) || File.symlink?(path)
+        raise ContractError, "system-overlay report path must be a regular non-symlink file" if File.symlink?(path) || !File.file?(path)
+      end
+      FileUtils.mkdir_p(File.dirname(path))
+      temporary = "#{path}.tmp-#{Process.pid}-#{Thread.current.object_id}"
+      File.open(temporary, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |file|
+        file.write("#{JSON.pretty_generate(payload)}\n")
+        file.flush
+        file.fsync
+      end
+      File.rename(temporary, path)
+      File.chmod(0o600, path)
+      path
+    ensure
+      FileUtils.rm_f(temporary) if defined?(temporary) && temporary
     end
   end
 
@@ -232,7 +410,8 @@ module NovaStationPinballMediaContract
 
     def probe(path)
       stdout, stderr, status = @runner.capture3(
-        @executable, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", path
+        @executable, "-v", "error", "-count_frames", "-print_format", "json",
+        "-show_format", "-show_streams", path
       )
       raise ContractError, "ffprobe failed for #{File.basename(path)}: #{stderr.strip}" unless status.success?
 
@@ -250,6 +429,9 @@ module NovaStationPinballMediaContract
         "width" => strict_integer(video.fetch("width")),
         "height" => strict_integer(video.fetch("height")),
         "duration" => strict_float(payload.fetch("format").fetch("duration")),
+        "video_duration" => strict_float(video.fetch("duration")),
+        "audio_duration" => strict_float(audio.fetch("duration")),
+        "video_frames" => strict_integer(video["nb_read_frames"] || video.fetch("nb_frames")),
         "frame_rate" => rational(video.fetch("avg_frame_rate")),
         "video_codec" => video.fetch("codec_name"),
         "video_profile" => video.fetch("profile"),
@@ -329,11 +511,13 @@ module NovaStationPinballMediaContract
   end
 
   class Contract
-    def initialize(run_root:, source_revision:, probe: FFProbe.new, visual_probe: PNGVisualProbe.new, allow_pending: false)
+    def initialize(run_root:, source_revision:, probe: FFProbe.new, visual_probe: PNGVisualProbe.new,
+                   overlay_guard: SystemOverlayGuard.new, allow_pending: false)
       @run_root = File.expand_path(run_root)
       @source_revision = source_revision
       @probe = probe
       @visual_probe = visual_probe
+      @overlay_guard = overlay_guard
       @allow_pending = allow_pending
       @errors = []
     end
@@ -505,7 +689,10 @@ module NovaStationPinballMediaContract
       info = @probe.probe(path)
       error("preview dimensions mismatch: #{cell['preview_path']}") unless
         info.values_at("width", "height") == device.values_at(:preview_width, :preview_height)
-      error("preview duration must be exactly 24 seconds: #{cell['preview_path']}") unless (info.fetch("duration") - 24.0).abs <= 0.05
+      error("preview duration must be exactly 24 seconds: #{cell['preview_path']}") unless (info.fetch("duration") - 24.0).abs <= 0.001
+      error("preview video track must be exactly 24 seconds: #{cell['preview_path']}") unless (info.fetch("video_duration") - 24.0).abs <= 0.001
+      error("preview audio track must be exactly 24 seconds: #{cell['preview_path']}") unless (info.fetch("audio_duration") - 24.0).abs <= 0.001
+      error("preview must contain exactly 720 video frames: #{cell['preview_path']}") unless info.fetch("video_frames") == 720
       error("preview frame rate must be exactly 30 fps: #{cell['preview_path']}") unless (info.fetch("frame_rate") - 30.0).abs <= 0.01
       error("preview video codec must be H.264: #{cell['preview_path']}") unless info.fetch("video_codec") == "h264"
       error("preview H.264 profile must be High: #{cell['preview_path']}") unless info.fetch("video_profile") == "High"
@@ -524,6 +711,12 @@ module NovaStationPinballMediaContract
       error("preview must contain exactly one video stream: #{cell['preview_path']}") unless info.fetch("video_streams") == 1
       error("preview must contain exactly one stereo audio stream: #{cell['preview_path']}") unless info.fetch("audio_streams") == 1
       error("preview tracks must be enabled: #{cell['preview_path']}") unless info.fetch("video_enabled", true) && info.fetch("audio_enabled", true)
+      @overlay_guard.validate!(
+        path: path,
+        report_path: SystemOverlayGuard.report_path(
+          run_root: @run_root, locale: cell.fetch("locale"), device: cell.fetch("device")
+        )
+      )
     rescue ContractError, KeyError => exception
       error(exception.message)
     end

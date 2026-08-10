@@ -76,6 +76,14 @@ module NovaStationPinballReleaseContract
       error("iOS deployment target must be 17.0") unless target["deploymentTarget"] == "17.0"
       error("Swift version must be 6.0") unless settings["SWIFT_VERSION"] == "6.0"
       error("device families must be iPhone and iPad") unless settings["TARGETED_DEVICE_FAMILY"] == "1,2"
+      error("marketing version must be controlled by Xcode build settings") unless
+        settings["MARKETING_VERSION"] == "1.0" &&
+          info["CFBundleShortVersionString"] == "$(MARKETING_VERSION)"
+      error("build number must be controlled by Xcode build settings") unless
+        settings["CURRENT_PROJECT_VERSION"] == "1" &&
+          info["CFBundleVersion"] == "$(CURRENT_PROJECT_VERSION)"
+      error("export compliance declaration must be explicit") unless
+        info["ITSAppUsesNonExemptEncryption"] == false
       landscapes = %w[UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight]
       error("iPhone orientation must be landscape") unless info["UISupportedInterfaceOrientations"] == landscapes
       error("iPad orientation must be landscape") unless info["UISupportedInterfaceOrientations~ipad"] == landscapes
@@ -230,34 +238,102 @@ module NovaStationPinballReleaseContract
       recording_marker = preview_generator.index('write!("recording")')
       started = preview_generator.index('wait_for!("started")')
       complete = preview_generator.index('wait_for!("complete")')
+      raw_tail_wait = preview_generator.rindex("recorder.wait_until_elapsed!")
       stop = preview_generator.index('stop_owned_process!(record_pid, "INT")')
-      unless ready && recording && recorder_ready && recording_marker && started && complete && stop &&
+      unless ready && recording && recorder_ready && recording_marker && started && complete && raw_tail_wait && stop &&
              ready < recording && recording < recorder_ready && recorder_ready < recording_marker &&
-             recording_marker < started && complete < stop
-        error("App Preview recording must be bounded by the ready/complete app handshake")
+             recording_marker < started && complete < raw_tail_wait && raw_tail_wait < stop
+        error("App Preview recording must be bounded by the ready/complete app handshake and full raw capture window")
       end
+      device_loop = preview_generator.index("configuration.udids.each_key")
+      canonical_call = preview_generator.index("prepare_canonical_test_artifacts!(device)", device_loop || 0)
+      locale_loop = preview_generator.index("configuration.locales.each", canonical_call || 0)
       build = preview_generator.index("build_for_testing_arguments")
-      inject = preview_generator.index("find_and_inject!")
-      test = preview_generator.index("test_without_building_arguments")
-      unless build && inject && test && build < inject && inject < test
-        error("App Preview XCTest must build, inject its isolated xctestrun, then test without building")
+      run_build = preview_generator.index("run_xcodebuild!(arguments)", build || 0)
+      find = preview_generator.index("XCTestRunConfigurator.new.find!", run_build || 0)
+      inject = preview_generator.index("inject_environment!", find || 0)
+      test = preview_generator.index("test_without_building_arguments", inject || 0)
+      canonical_pipeline = [build, run_build, find, inject, test]
+      unless device_loop && canonical_call && locale_loop && device_loop < canonical_call && canonical_call < locale_loop &&
+             canonical_pipeline.all? && canonical_pipeline.each_cons(2).all? { |left, right| left < right } &&
+             preview_generator.scan("build_for_testing_arguments").length == 1 &&
+             preview_generator.scan("test_without_building_arguments").length == 1 &&
+             preview_generator.include?("source: canonical.xctestrun") &&
+             !preview_generator.match?(/simctl.*(?:install|uninstall)/)
+        error("App Preview XCTest must build once per device, then run locale xctestrun copies sequentially from the canonical products")
       end
       if preview_generator.match?(/Process\.spawn\(\s*\{\s*"NOVA_MEDIA_HANDSHAKE_TOKEN"/m)
         error("App Preview handshake token must not rely on a shell export around xcodebuild")
       end
       media_contract = File.read(path("scripts/app_store/media_contract.rb"), encoding: "UTF-8")
+      preview_test = File.read(path("NovaStationPinballUITests/AppPreviewUITests.swift"), encoding: "UTF-8")
+      settle = preview_test.index("guard waitForSpringBoardToSettle()")
+      launch = preview_test.index("let app = XCUIApplication()", settle || 0)
+      unless settle && launch && settle < launch &&
+             preview_test.include?('XCUIApplication(bundleIdentifier: "com.apple.springboard")') &&
+             preview_test.include?('notificationIdentifier = "NotificationShortLookView"') &&
+             preview_test.include?("initialDelaySeconds: TimeInterval = 30") &&
+             preview_test.include?("requiredContinuousAbsenceSeconds: TimeInterval = 5") &&
+             preview_test.include?("maximumObservationSeconds: TimeInterval = 30") &&
+             preview_generator.include?("timeout: 90.0")
+        error("App Preview capture must wait after boot and require a bounded continuous absence of SpringBoard notifications before launch/recording")
+      end
       unless preview_generator.include?("CaptureTiming.trim_offset") &&
              preview_generator.include?("capture_trim_offset: trim_offset") &&
              media_contract.include?('"capture_trim_offset_seconds" => nil') &&
              media_contract.include?("invalid capture trim offset")
         error("App Preview measured trim offset must be persisted and validated")
       end
+      unless preview_generator.include?("RAW_TAIL_MARGIN_SECONDS = 1.0") &&
+             preview_generator.include?("MAX_FINAL_PADDING_SECONDS = 1.0 / FRAME_RATE") &&
+             preview_generator.include?("RawTimeline.end_time") &&
+             preview_generator.include?("CaptureWindow.residual_padding") &&
+             preview_generator.include?("EncodedMedia.validate!")
+        error("App Preview recorder must retain a deterministic raw tail and fail closed beyond one frame of residual padding")
+      end
       %w[-profile:v -level:v -pix_fmt -b:v -minrate -maxrate -profile:a -b:a -ar -ac].each do |flag|
         error("App Preview encoder missing #{flag}") unless preview_generator.include?(%Q{"#{flag}"})
       end
-      error("App Preview encoder must produce progressive 30 fps H.264 CBR") unless
-        preview_generator.include?("fps=30,setfield=prog") && preview_generator.include?("nal-hrd=cbr")
-      preview_test = File.read(path("NovaStationPinballUITests/AppPreviewUITests.swift"), encoding: "UTF-8")
+      unless preview_generator.include?("tpad=stop_mode=clone") &&
+             preview_generator.include?("TARGET_FRAME_COUNT = 720") &&
+             preview_generator.include?('trim=end_frame=#{CaptureWindow::TARGET_FRAME_COUNT}') &&
+             preview_generator.include?('"-frames:v"') &&
+             preview_generator.include?("atrim=duration=24") &&
+             preview_generator.include?("fps=30") &&
+             preview_generator.include?("setfield=prog") &&
+             preview_generator.include?("nal-hrd=cbr") &&
+             !preview_generator.include?('"-shortest"')
+        error("App Preview encoder must produce exact 24-second, 720-frame progressive H.264 CBR media without shortest truncation")
+      end
+      unless media_contract.include?("preview video track must be exactly 24 seconds") &&
+             media_contract.include?("preview audio track must be exactly 24 seconds") &&
+             media_contract.include?("preview must contain exactly 720 video frames")
+        error("App Preview media contract must validate exact audio/video durations and frame count")
+      end
+      overlay = preview_generator.index("validate_system_overlay!(destination, locale, device)")
+      mark = preview_generator.index("mark_artifact!", overlay || 0)
+      reencoder = File.read(path("scripts/app_store/reencode_app_previews.rb"), encoding: "UTF-8")
+      reencode_overlay = reencoder.index("SystemOverlayGuard.new")
+      reencode_mark = reencoder.index("mark_artifact!", reencode_overlay || 0)
+      unless overlay && mark && overlay < mark && reencode_overlay && reencode_mark && reencode_overlay < reencode_mark &&
+             media_contract.include?("class SystemOverlayGuard") &&
+             media_contract.include?("EXPECTED_FRAME_COUNT = 720") &&
+             media_contract.include?("MAX_TOP_BAND_YAVG = 64.0") &&
+             media_contract.include?("lavfi.signalstats.YAVG") &&
+             media_contract.include?("system UI top-band guard rejected") &&
+             media_contract.include?("violation_spans") &&
+             media_contract.include?("@overlay_guard.validate!")
+        error("App Preview generation, reuse, and strict contract must exhaustively reject system overlays across all 720 top-band frames with timestamped reports")
+      end
+      clean_fixture = JSON.parse(File.read(path("scripts/app_store/fixtures/system_overlay_clean.json"), encoding: "UTF-8"))
+      polluted_fixture = JSON.parse(File.read(path("scripts/app_store/fixtures/system_overlay_polluted_en_se.json"), encoding: "UTF-8"))
+      polluted_span = polluted_fixture.fetch("spans", []).first
+      unless clean_fixture["frame_count"] == 720 && clean_fixture["spans"] == [] &&
+             polluted_fixture["frame_count"] == 720 &&
+             polluted_span&.values_at("identifier", "first_frame", "last_frame", "first_pts_seconds", "last_pts_seconds") ==
+               ["NotificationShortLookView", 374, 597, 12.466667, 19.9]
+        error("system-overlay fixtures must retain the clean 720-frame control and the observed EN SE 12.466667-19.900000 regression")
+      end
       error("App Preview UI test must receive the app-local handshake token") unless preview_test.include?("NOVA_MEDIA_HANDSHAKE_TOKEN")
       fastfile = File.read(path("fastlane/Fastfile"), encoding: "UTF-8")
       %w[generate_screenshots.rb generate_app_previews.rb media_contract.rb].each do |script|
@@ -267,7 +343,7 @@ module NovaStationPinballReleaseContract
         body = fastfile[/lane :#{lane}\b do\n(.*?)\n\s*end/m, 1]
         error("#{lane} must gate media through media_contract") unless body&.include?("media_contract")
       end
-    rescue Errno::ENOENT => exception
+    rescue Errno::ENOENT, JSON::ParserError => exception
       error("media pipeline validation failed: #{exception.message}")
     end
 

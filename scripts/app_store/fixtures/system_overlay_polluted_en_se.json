@@ -1,0 +1,16 @@
+{
+  "name": "en-se-settings-notification-short-look",
+  "frame_count": 720,
+  "frame_rate": 30,
+  "default_top_band_yavg": 46.0,
+  "spans": [
+    {
+      "identifier": "NotificationShortLookView",
+      "first_frame": 374,
+      "last_frame": 597,
+      "first_pts_seconds": 12.466667,
+      "last_pts_seconds": 19.900000,
+      "top_band_yavg": 149.0
+    }
+  ]
+}

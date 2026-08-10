@@ -30,6 +30,11 @@ class ReleaseContractTest < Minitest::Test
     assert_equal "1,2", settings.fetch("TARGETED_DEVICE_FAMILY")
     assert_equal "17.0", app_target.fetch("deploymentTarget")
     info = app_target.fetch("info").fetch("properties")
+    assert_equal "1.0", settings.fetch("MARKETING_VERSION")
+    assert_equal "1", settings.fetch("CURRENT_PROJECT_VERSION")
+    assert_equal "$(MARKETING_VERSION)", info.fetch("CFBundleShortVersionString")
+    assert_equal "$(CURRENT_PROJECT_VERSION)", info.fetch("CFBundleVersion")
+    assert_equal false, info.fetch("ITSAppUsesNonExemptEncryption")
     expected_orientations = %w[UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight]
     assert_equal expected_orientations,
                  info.fetch("UISupportedInterfaceOrientations")
@@ -81,6 +86,11 @@ class ReleaseContractTest < Minitest::Test
 
   def test_fastlane_release_contract_resolves_app_script_independently_of_lane_cwd
     stdout, stderr, status = Open3.capture3(
+      {
+        "FASTLANE_SKIP_UPDATE_CHECK" => "1",
+        "FASTLANE_OPT_OUT_USAGE" => "YES",
+        "BUNDLE_DISABLE_CHECKSUM_VALIDATION" => "true"
+      },
       "/opt/homebrew/bin/ruby", "-S", "bundle", "exec", "fastlane", "release_contract",
       chdir: ROOT
     )
@@ -231,16 +241,57 @@ class ReleaseContractTest < Minitest::Test
     %w[ready recording started complete].each { |marker| assert_includes preview_generator, %Q{"#{marker}"} }
     assert_includes handshake, "prepareAndSignalReady"
     assert_includes preview_test, "NOVA_MEDIA_HANDSHAKE_TOKEN"
+    assert_includes preview_test, 'XCUIApplication(bundleIdentifier: "com.apple.springboard")'
+    assert_includes preview_test, 'notificationIdentifier = "NotificationShortLookView"'
+    assert_includes preview_test, "initialDelaySeconds: TimeInterval = 30"
+    assert_includes preview_test, "requiredContinuousAbsenceSeconds: TimeInterval = 5"
+    assert_includes preview_test, "maximumObservationSeconds: TimeInterval = 30"
+    assert_operator preview_test.index("guard waitForSpringBoardToSettle()"), :<,
+                    preview_test.index("let app = XCUIApplication()")
     assert_includes preview_generator, 'wait_for!("ready")'
     assert_includes preview_generator, 'wait_for!("complete")'
     assert_includes preview_generator, "wait_until_writing!"
+    assert_includes preview_generator, "recorder.wait_until_elapsed!"
     assert_includes preview_generator, "CaptureTiming.trim_offset"
     assert_includes preview_generator, "capture_trim_offset: trim_offset"
+    assert_includes preview_generator, "RAW_TAIL_MARGIN_SECONDS = 1.0"
+    assert_includes preview_generator, "MAX_FINAL_PADDING_SECONDS = 1.0 / FRAME_RATE"
+    assert_includes preview_generator, "RawTimeline.end_time"
+    assert_includes preview_generator, "CaptureWindow.residual_padding"
+    assert_includes preview_generator, "EncodedMedia.validate!"
+    assert_includes preview_generator, "timeout: 90.0"
+    overlay_index = preview_generator.index("validate_system_overlay!(destination, locale, device)")
+    mark_index = preview_generator.index("mark_artifact!", overlay_index || 0)
+    refute_nil overlay_index
+    refute_nil mark_index
+    assert_operator overlay_index, :<, mark_index
+    assert_includes preview_generator, 'runner.capture("xcrun", "simctl", "shutdown", udid)'
+    assert_includes preview_generator, "configuration.udids.each_key"
+    assert_includes preview_generator, "prepare_canonical_test_artifacts!(device)"
+    assert_includes preview_generator, "configuration.locales.each"
+    assert_includes preview_generator, "XCTestRunConfigurator.new.find!"
+    assert_includes preview_generator, "source: canonical.xctestrun"
+    assert_equal 1, preview_generator.scan("build_for_testing_arguments").length
+    assert_equal 1, preview_generator.scan("test_without_building_arguments").length
+    assert_operator preview_generator.index("configuration.udids.each_key"), :<,
+                    preview_generator.index("prepare_canonical_test_artifacts!(device)")
+    assert_operator preview_generator.index("prepare_canonical_test_artifacts!(device)"), :<,
+                    preview_generator.index("configuration.locales.each")
+    refute_match(/simctl.*(?:install|uninstall)/, preview_generator)
+    refute_match(/shutdown all|erase all|\bbooted\b/i, preview_generator)
     refute_match(/Process\.spawn\(\s*\{\s*"NOVA_MEDIA_HANDSHAKE_TOKEN"/m, preview_generator)
     %w[-profile:v -level:v -b:v -minrate -maxrate -profile:a -b:a -ar -ac].each do |flag|
       assert_includes preview_generator, %Q{"#{flag}"}
     end
+    assert_includes preview_generator, "tpad=stop_mode=clone"
+    assert_includes preview_generator, "TARGET_FRAME_COUNT = 720"
+    assert_includes preview_generator, 'trim=end_frame=#{CaptureWindow::TARGET_FRAME_COUNT}'
+    assert_includes preview_generator, '"-frames:v"'
+    assert_includes preview_generator, "atrim=duration=24"
+    assert_includes preview_generator, "fps=30"
+    assert_includes preview_generator, "setfield=prog"
     assert_includes preview_generator, "nal-hrd=cbr"
+    refute_includes preview_generator, '"-shortest"'
 
     generation = File.read(File.join(ROOT, "scripts/app_store/media_generation.rb"), encoding: "UTF-8")
     assert_includes generation, "REQUIRED_RUNTIME"
@@ -255,6 +306,32 @@ class ReleaseContractTest < Minitest::Test
     media_contract = File.read(File.join(ROOT, "scripts/app_store/media_contract.rb"), encoding: "UTF-8")
     assert_includes media_contract, '"capture_trim_offset_seconds" => nil'
     assert_includes media_contract, "invalid capture trim offset"
+    assert_includes media_contract, "preview video track must be exactly 24 seconds"
+    assert_includes media_contract, "preview audio track must be exactly 24 seconds"
+    assert_includes media_contract, "preview must contain exactly 720 video frames"
+    assert_includes media_contract, "class SystemOverlayGuard"
+    assert_includes media_contract, "EXPECTED_FRAME_COUNT = 720"
+    assert_includes media_contract, "MAX_TOP_BAND_YAVG = 64.0"
+    assert_includes media_contract, "lavfi.signalstats.YAVG"
+    assert_includes media_contract, "system UI top-band guard rejected"
+    assert_includes media_contract, "violation_spans"
+    assert_includes media_contract, "@overlay_guard.validate!"
+    reencoder = File.read(File.join(ROOT, "scripts/app_store/reencode_app_previews.rb"), encoding: "UTF-8")
+    reencode_overlay = reencoder.index("SystemOverlayGuard.new")
+    reencode_mark = reencoder.index("mark_artifact!", reencode_overlay || 0)
+    refute_nil reencode_overlay
+    refute_nil reencode_mark
+    assert_operator reencode_overlay, :<, reencode_mark
+    clean_fixture = JSON.parse(File.read(File.join(ROOT, "scripts/app_store/fixtures/system_overlay_clean.json")))
+    polluted_fixture = JSON.parse(File.read(File.join(ROOT, "scripts/app_store/fixtures/system_overlay_polluted_en_se.json")))
+    assert_equal 720, clean_fixture.fetch("frame_count")
+    assert_empty clean_fixture.fetch("spans")
+    polluted_span = polluted_fixture.fetch("spans").fetch(0)
+    assert_equal "NotificationShortLookView", polluted_span.fetch("identifier")
+    assert_equal 374, polluted_span.fetch("first_frame")
+    assert_equal 597, polluted_span.fetch("last_frame")
+    assert_equal 12.466667, polluted_span.fetch("first_pts_seconds")
+    assert_equal 19.9, polluted_span.fetch("last_pts_seconds")
     refute_match(/simctl.*(?:create|delete)|shutdown all|erase all|\bbooted\b/i, generation)
   end
 

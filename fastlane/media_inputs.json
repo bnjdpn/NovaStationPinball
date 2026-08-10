@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "ui": [
+    "NovaStationPinball",
+    "NovaStationCore"
+  ],
+  "assets": [
+    "Art",
+    "NovaStationPinball/Resources/Art",
+    "NovaStationPinball/Resources/Assets.xcassets"
+  ],
+  "fixtures": [
+    "NovaStationPinballUITests",
+    "NovaStationPinball/App/MediaScenario.swift",
+    "NovaStationPinball/App/MediaPreviewHandshake.swift"
+  ],
+  "framing": [
+    "scripts/app_store/media_generation.rb",
+    "scripts/app_store/generate_screenshots.rb",
+    "scripts/app_store/generate_app_previews.rb",
+    "scripts/app_store/reencode_app_previews.rb",
+    "scripts/app_store/media_contract.rb"
+  ],
+  "localizations": {
+    "en-US": [
+      "fastlane/metadata/en-US",
+      "NovaStationPinball/Resources/Localizable.xcstrings"
+    ],
+    "fr-FR": [
+      "fastlane/metadata/fr-FR",
+      "NovaStationPinball/Resources/Localizable.xcstrings"
+    ]
+  }
+}

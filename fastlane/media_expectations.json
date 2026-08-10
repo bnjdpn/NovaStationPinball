@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "strategy": "self_provisioning_simulator",
+  "locales": [
+    "en-US",
+    "fr-FR"
+  ],
+  "previews_applicable": true
+}

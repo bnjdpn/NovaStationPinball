@@ -1,3 +1,3 @@
 Welcome aboard Nova Station.
 
-Version 1.0 includes the complete pinball table, deterministic physics, missions, nine clearance promotions, multiball, tilt, local high scores, optional Game Center, English and French interfaces, and full iPhone and iPad support.
+Version 1.0 includes an interactive table guide, the complete pinball table, deterministic physics, missions, nine clearance promotions, multiball, tilt, local high scores, optional Game Center, English and French interfaces, and full iPhone and iPad support.

@@ -78,6 +78,68 @@ final class AppModelRuntimeIntegrationTests: XCTestCase {
         XCTAssertEqual(harness.model.ballsInPlay, 3)
         XCTAssertEqual(harness.model.scene.currentSnapshot.balls.count, 3)
     }
+
+    func testTableGuidePausesAndResumesATableThatWasRunning() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.activate()
+
+        XCTAssertFalse(harness.model.isSimulationPaused)
+
+        harness.model.beginTableGuide()
+
+        XCTAssertTrue(harness.model.isSimulationPaused)
+
+        harness.model.endTableGuide()
+
+        XCTAssertFalse(harness.model.isSimulationPaused)
+    }
+
+    func testTableGuidePreservesAnExistingUserPause() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.activate()
+        harness.model.togglePauseFromAccessibility()
+
+        XCTAssertTrue(harness.model.isSimulationPaused)
+
+        harness.model.beginTableGuide()
+        harness.model.endTableGuide()
+
+        XCTAssertTrue(harness.model.isSimulationPaused)
+    }
+
+    func testTableGuideKeepsSystemPausedTableStoppedUntilDismissal() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.model.lifecycleCoordinator.start()
+
+        XCTAssertTrue(harness.model.isSimulationPaused)
+
+        harness.model.beginTableGuide()
+        harness.model.setApplicationActivity(.active)
+
+        XCTAssertTrue(harness.model.isSimulationPaused)
+
+        harness.model.endTableGuide()
+
+        XCTAssertFalse(harness.model.isSimulationPaused)
+    }
+
+    func testTableGuideDoesNotOverrideAnAudioInterruptionThatForbidsResume() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.activate()
+        harness.model.beginTableGuide()
+
+        harness.model.audioInterruptionBegan()
+        harness.model.audioInterruptionEnded(shouldResume: false)
+        harness.model.endTableGuide()
+
+        XCTAssertTrue(harness.model.isSimulationPaused)
+        XCTAssertTrue(harness.model.lifecycleCoordinator.isUserPaused)
+        XCTAssertFalse(harness.model.lifecycleCoordinator.isTableGuidePresented)
+    }
 }
 
 @MainActor

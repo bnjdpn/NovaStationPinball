@@ -2,8 +2,23 @@ import XCTest
 
 @MainActor
 final class AppPreviewUITests: XCTestCase {
+    private enum SpringBoardSettle {
+        static let initialDelaySeconds: TimeInterval = 30
+        static let requiredContinuousAbsenceSeconds: TimeInterval = 5
+        static let maximumObservationSeconds: TimeInterval = 30
+        static let pollIntervalSeconds: TimeInterval = 0.25
+        static let notificationIdentifier = "NotificationShortLookView"
+    }
+
     func testDeterministicTwentyFourSecondPreviewTimeline() {
         XCUIDevice.shared.orientation = .landscapeRight
+        guard waitForSpringBoardToSettle() else {
+            XCTFail(
+                "SpringBoard did not remain free of \(SpringBoardSettle.notificationIdentifier) " +
+                "for \(SpringBoardSettle.requiredContinuousAbsenceSeconds) continuous seconds"
+            )
+            return
+        }
         let scenarios = ["launch", "mission", "promotion", "multiball", "tilt", "game-over"]
         let token = ProcessInfo.processInfo.environment["NOVA_MEDIA_HANDSHAKE_TOKEN"] ?? ""
         let mediaLocale = ProcessInfo.processInfo.environment["NOVA_MEDIA_LOCALE"] ?? ""
@@ -37,7 +52,37 @@ final class AppPreviewUITests: XCTestCase {
                 app.otherElements["media.scenario.\(scenario)"].waitForExistence(timeout: 5),
                 "Preview timeline did not reach \(scenario)"
             )
+            if scenario == "mission" {
+                XCTAssertTrue(
+                    app.otherElements["tableGuideStep.missions"].waitForExistence(timeout: 2),
+                    "Mission media segment must show the interactive table guide"
+                )
+            }
         }
         Thread.sleep(forTimeInterval: 4)
+    }
+
+    private func waitForSpringBoardToSettle() -> Bool {
+        let springBoard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        Thread.sleep(forTimeInterval: SpringBoardSettle.initialDelaySeconds)
+
+        let deadline = Date().addingTimeInterval(SpringBoardSettle.maximumObservationSeconds)
+        var continuouslyClearSince: Date?
+        repeat {
+            let notificationVisible =
+                springBoard.otherElements[SpringBoardSettle.notificationIdentifier].exists
+            let now = Date()
+            if notificationVisible {
+                continuouslyClearSince = nil
+            } else if let clearSince = continuouslyClearSince {
+                if now.timeIntervalSince(clearSince) >= SpringBoardSettle.requiredContinuousAbsenceSeconds {
+                    return true
+                }
+            } else {
+                continuouslyClearSince = now
+            }
+            Thread.sleep(forTimeInterval: SpringBoardSettle.pollIntervalSeconds)
+        } while Date() < deadline
+        return false
     }
 }

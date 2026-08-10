@@ -19,6 +19,7 @@ final class PinballScene: SKScene {
     private var interpreter = TouchInterpreter()
     private var previousUpdateTime: TimeInterval?
     private var lifecycleIsPaused = true
+    private var tableGuideIsPresented = false
     private var didBuildRasterTable = false
     private let leftFlipper = SKSpriteNode(texture: SKTexture(imageNamed: "flipper-left"))
     private let rightFlipper = SKSpriteNode(texture: SKTexture(imageNamed: "flipper-right"))
@@ -94,6 +95,12 @@ final class PinballScene: SKScene {
         lifecycleIsPaused = paused
         driver.setPaused(paused)
         previousUpdateTime = nil
+    }
+
+    func setTableGuidePresented(_ presented: Bool) {
+        guard tableGuideIsPresented != presented else { return }
+        tableGuideIsPresented = presented
+        updateMenu(for: driver.phase)
     }
 
     func restore(snapshot: SimulationSnapshot, rules: GameRulesState) throws {
@@ -214,7 +221,7 @@ final class PinballScene: SKScene {
     }
 
     private func updateMenu(for phase: GameSessionPhase) {
-        menuLayer.isHidden = phase == .playing
+        menuLayer.isHidden = tableGuideIsPresented || phase == .playing
         launchArtwork.isHidden = phase != .launch
         gameOverArtwork.isHidden = phase != .gameOver
     }

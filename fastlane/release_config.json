@@ -1,11 +1,33 @@
 {
   "app_name": "Nova Station Pinball",
   "app_slug": "NovaStationPinball",
+  "app_store_name": "Nova Station Pinball",
+  "version": "1.0",
+  "project": "NovaStationPinball.xcodeproj",
+  "scheme": "NovaStationPinball",
+  "team_id": "767SX34A7Z",
+  "sku": "nova-station-pinball-ios",
+  "primary_locale": "en-US",
+  "artifact_root": "Builds/AppStore/NovaStationPinball",
+  "scratch_root": "/private/tmp/apps-factory/NovaStationPinball",
   "bundle_id": "com.bnjdpn.NovaStationPinball",
   "locales": ["en-US", "fr-FR"],
   "support_url": "https://bnjdpn.github.io/NovaStationPinball/#contact",
   "privacy_url": "https://bnjdpn.github.io/NovaStationPinball/privacy.html",
   "price": "0.00",
+  "pricing": {
+    "price": "0.00",
+    "territory": "FRA",
+    "currency": "EUR",
+    "readback_contract": "free-v1"
+  },
+  "age_rating": "fastlane/metadata/app_rating_config.json",
+  "content_rights_declaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT",
+  "iap": [
+    "com.bnjdpn.NovaStationPinball.tip.cafe",
+    "com.bnjdpn.NovaStationPinball.tip.merci",
+    "com.bnjdpn.NovaStationPinball.tip.soutien"
+  ],
   "tip_products": [
     { "id": "tip.cafe", "product_id": "com.bnjdpn.NovaStationPinball.tip.cafe", "type": "CONSUMABLE" },
     { "id": "tip.merci", "product_id": "com.bnjdpn.NovaStationPinball.tip.merci", "type": "CONSUMABLE" },
@@ -24,5 +46,27 @@
     "parallel_locales": 2,
     "devices": ["iphone-17-pro-max", "iphone-se-3", "ipad-pro-13-m5"],
     "scenarios": ["launch", "mission", "promotion", "multiball", "tilt", "game-over"]
+  },
+  "release_pipeline": {
+    "schema_version": 1,
+    "status_script": "scripts/app_store/status.rb",
+    "media_inputs": "fastlane/media_inputs.json",
+    "media_expectations": "fastlane/media_expectations.json",
+    "select_build_script": "scripts/app_store/select_build.rb",
+    "metadata_readback_contract": "deliver-v1",
+    "metadata_locales": ["en-US", "fr-FR"],
+    "metadata_review_information_fields": ["notes"],
+    "metadata_expected_omissions": [
+      {
+        "path": "version_localizations.*.whatsNew",
+        "reason": "deliver_skips_release_notes_for_first_version"
+      },
+      {
+        "path": "review_information.demoAccountName,demoAccountPassword",
+        "reason": "not_configured_not_mutated"
+      }
+    ],
+    "iap_readback_contract": "exact-v1",
+    "content_rights_readback_contract": "exact-v1"
   }
 }

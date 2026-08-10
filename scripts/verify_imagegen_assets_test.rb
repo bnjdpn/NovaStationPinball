@@ -465,12 +465,95 @@ class VerifyImagegenAssetsTest < Minitest::Test
       "art.frame.4x3",
       "art.table",
       "art.console",
-      'media.scenario.\(mediaScenario.rawValue)'
+      'media.scenario.\(mediaScenario.rawValue)',
+      "tableGuideOpen",
+      "tableGuide",
+      'tableGuideStep.\(step.identifier)',
+      "tableGuideClose",
+      "tableGuidePrevious",
+      "tableGuideNext",
+      "tableGuideDone"
     ], accessibility_identifiers
     assert_empty sprite_names & accessibility_identifiers,
                  "SpriteKit node names leak into XCUI and collide with SwiftUI accessibility overlays"
     assert sprite_names.all? { |name| name.start_with?("sprite.") },
            "visible SpriteKit node names must use the sprite.* namespace"
+  end
+
+  def test_table_guide_controls_card_keeps_every_numbered_marker_visible
+    root_view = File.read(File.join(ROOT, "NovaStationPinball/App/RootView.swift"), encoding: "UTF-8")
+    layout = File.read(
+      File.join(ROOT, "NovaStationCore/Sources/NovaStationCore/TableVisualLayout.swift"),
+      encoding: "UTF-8"
+    )
+    assert_includes root_view, "min(controlsPreferredHeight, controlsCollisionSafeHeight)"
+    assert_includes root_view, "nearestMarkerTop - TableGuideLayoutContract.edgeInset -"
+
+    swift_constant = lambda do |name|
+      match = root_view.match(/static let #{Regexp.escape(name)}: CGFloat = ([0-9.]+)/)
+      refute_nil match, "missing table guide layout constant #{name}"
+      Float(match[1])
+    end
+    canvas_constant = lambda do |name|
+      match = layout.match(/public static let #{Regexp.escape(name)} = ([0-9_]+)/)
+      refute_nil match, "missing table visual canvas constant #{name}"
+      Integer(match[1].delete("_"), 10)
+    end
+    anchor = lambda do |name|
+      match = layout.match(
+        /public static let #{Regexp.escape(name)} = TableVisualAnchor\([^\n]+pixelX: ([0-9_.]+), pixelY: ([0-9_.]+)/
+      )
+      refute_nil match, "missing controls anchor #{name}"
+      [Float(match[1].delete("_")), Float(match[2].delete("_"))]
+    end
+
+    edge = swift_constant.call("edgeInset")
+    clearance = swift_constant.call("markerClearance")
+    width_fraction = swift_constant.call("controlsWidthFraction")
+    height_fraction = swift_constant.call("controlsHeightFraction")
+    minimum_width = swift_constant.call("controlsMinimumWidth")
+    minimum_height = swift_constant.call("controlsMinimumHeight")
+    canvas_width = canvas_constant.call("canvasWidth")
+    canvas_height = canvas_constant.call("canvasHeight")
+    anchors = %w[leftFlipperPivot rightFlipperPivot plunger].map { |name| anchor.call(name) }
+
+    rectangles_intersect = lambda do |left, right|
+      left.fetch(:x) < right.fetch(:x) + right.fetch(:width) &&
+        left.fetch(:x) + left.fetch(:width) > right.fetch(:x) &&
+        left.fetch(:y) < right.fetch(:y) + right.fetch(:height) &&
+        left.fetch(:y) + left.fetch(:height) > right.fetch(:y)
+    end
+
+    [[500.0, 375.0], [1_024.0, 768.0], [1_366.0, 1_024.0]].each do |width, height|
+      marker_diameter = [54.0, [34.0, height * 0.085].max].min
+      marker_top = anchors.map do |_pixel_x, pixel_y|
+        height * (1 - pixel_y / canvas_height) - marker_diameter / 2
+      end.min
+      preferred_height = [
+        height - 2 * edge,
+        [minimum_height, height * height_fraction].max
+      ].min
+      safe_height = [1.0, marker_top - edge - clearance].max
+      card_height = [preferred_height, safe_height].min
+      card_width = [width - 2 * edge, [minimum_width, width * width_fraction].max].min
+      expanded_card = {
+        x: width - card_width - edge - clearance,
+        y: edge - clearance,
+        width: card_width + 2 * clearance,
+        height: card_height + 2 * clearance
+      }
+
+      anchors.each do |pixel_x, pixel_y|
+        marker = {
+          x: width * pixel_x / canvas_width - marker_diameter / 2,
+          y: height * (1 - pixel_y / canvas_height) - marker_diameter / 2,
+          width: marker_diameter,
+          height: marker_diameter
+        }
+        refute rectangles_intersect.call(expanded_card, marker),
+               "Controls card overlaps a numbered marker at #{width.to_i}x#{height.to_i}"
+      end
+    end
   end
 
   def test_runtime_component_edges_are_antialiased_and_free_of_green_or_magenta_spill

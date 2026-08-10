@@ -6,6 +6,7 @@ PENSÉ POUR LE FLIPPER
 • Batteurs réactifs sous les deux pouces
 • Lanceur à tirer puis relâcher
 • Geste horizontal court pour secouer, avec protection contre le tilt
+• Guide interactif des contrôles, voies de mission et cibles de progression
 • Missions, multiplicateurs, bonus, billes supplémentaires et multibille
 • Records locaux enregistrés sur votre appareil
 • Classement Game Center facultatif

@@ -254,18 +254,30 @@ module NovaStationPinballPreviewReencoding
         expected_udid: configuration.udids.fetch(device_id), runner: runner
       )
       trim_offset = receipt.fetch("capture_trim_offset_seconds")
+      raw_end = NovaStationPinballPreviewGeneration::RawTimeline.end_time(raw, runner: runner)
+      padding = NovaStationPinballPreviewGeneration::CaptureWindow.residual_padding(
+        raw_end: raw_end, trim_offset: trim_offset
+      )
       destination = File.join(run_root, "app_previews", locale, "NovaStationPinball-#{device_id}.mov")
       FileUtils.mkdir_p(File.dirname(destination))
       arguments = NovaStationPinballPreviewGeneration::Encoding.arguments(
         source: raw, destination: destination,
         width: device.fetch(:preview_width), height: device.fetch(:preview_height),
-        trim_offset: trim_offset, transform: device.fetch(:raw_transform)
+        trim_offset: trim_offset, transform: device.fetch(:raw_transform),
+        padding_duration: padding
       )
       stdout, stderr, status = runner.capture(*arguments, chdir: app_root)
       unless status.success?
         raise NovaStationPinballMediaContract::ContractError,
               "raw App Preview reencoding failed: #{[stdout, stderr].join("\n").strip}"
       end
+      NovaStationPinballPreviewGeneration::EncodedMedia.validate!(destination, runner: runner)
+      NovaStationPinballMediaContract::SystemOverlayGuard.new(runner: runner).validate!(
+        path: destination,
+        report_path: NovaStationPinballMediaContract::SystemOverlayGuard.report_path(
+          run_root: run_root, locale: locale, device: device_id
+        )
+      )
 
       mark_artifact!(
         locale: locale, device: device_id, kind: :preview, path: destination,
