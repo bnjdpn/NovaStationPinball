@@ -41,7 +41,10 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_equal LOCALES, pipeline.fetch("metadata_locales")
     assert_equal ["notes"], pipeline.fetch("metadata_review_information_fields")
     assert_equal "exact-v1", pipeline.fetch("iap_readback_contract")
-    %w[status_script media_inputs media_expectations select_build_script].each do |key|
+    %w[
+      status_script media_inputs media_expectations select_build_script
+      media_adoption_contract
+    ].each do |key|
       path = File.expand_path(pipeline.fetch(key), ROOT)
       assert path.start_with?("#{ROOT}/"), "#{key} escaped app root"
       assert File.file?(path), "missing #{key}: #{path}"
@@ -49,6 +52,43 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     end
     refute pipeline.key?("simulator_requirements"),
            "Nova owns its fixed-pool leases inside the app-local generator"
+    assert_equal "adopt_media", pipeline.fetch("media_adoption_lane")
+
+    contract = JSON.parse(
+      File.binread(File.join(ROOT, pipeline.fetch("media_adoption_contract")))
+    )
+    assert_equal 2, contract.fetch("schema_version")
+    assert_equal "NovaStationPinball", contract.fetch("app_slug")
+    assert_equal "20260810-nova-100-overlayguard-019fe558",
+                 contract.fetch("release_run_id")
+    assert_equal "10a88967f740bada3789ba9d4c99edddb4db2ed1",
+                 contract.fetch("baseline_head")
+    assert_equal "d85dbcc0ab60980b482b39ababeff38e2346660b7fe409ce16e553bbf0cdeb13",
+                 contract.fetch("source_revision")
+    assert_equal 36, contract.fetch("screenshot_count")
+    assert_equal 6, contract.fetch("preview_count")
+    proof = contract.fetch("media_proof")
+    assert_equal 36, proof.dig("screenshots", "count")
+    assert_match(/\A[0-9a-f]{64}\z/, proof.dig("screenshots", "sha256"))
+    assert_equal 6, proof.dig("previews", "count")
+    assert_match(/\A[0-9a-f]{64}\z/, proof.dig("previews", "sha256"))
+    assert_equal 1, proof.dig("manifest", "count")
+    assert_match(/\A[0-9a-f]{64}\z/, proof.dig("manifest", "sha256"))
+    assert_equal 6, proof.dig("system_overlay", "reports")
+    assert_equal 4_320, proof.dig("system_overlay", "scanned_frames")
+    assert_equal 0, proof.dig("system_overlay", "violation_count")
+    assert_match(/\A[0-9a-f]{64}\z/,
+                 proof.dig("system_overlay", "semantic_sha256"))
+    assert_equal 19, proof.dig("human_review", "count")
+    assert_equal "PASS", proof.dig("human_review", "verdict")
+    assert_match(/\A[0-9a-f]{64}\z/,
+                 proof.dig("human_review", "sha256"))
+    assert_match(/\A[0-9a-f]{64}\z/, contract.fetch("contract_self_sha256"))
+    assert contract.fetch("allowed_source_changes").all? { |change|
+      change.keys.sort == %w[after_sha256 before_sha256 class path] &&
+        change.fetch("class") == "release_tooling" &&
+        change.fetch("after_sha256").match?(/\A[0-9a-f]{64}\z/)
+    }
   end
 
   def test_media_snapshot_and_expectation_cover_the_real_nova_matrix
@@ -80,7 +120,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     source = File.binread(FASTFILE_PATH)
     required_lanes = %w[
       setup_asc release_contract asc_status metadata screenshots app_previews
-      media_contract upload_screenshots upload_previews build_release upload_release
+      adopt_media media_contract upload_screenshots upload_previews build_release upload_release
       submit_review release_quick pricing iap_status iap_sync
     ]
     required_lanes.each { |name| assert_match(/^\s*lane :#{name}\b/, source) }
@@ -109,6 +149,14 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_includes build, "nova_target_build!"
     assert_equal 1, build.scan("build_app(").length
     assert_includes build, "nova_verify_ipa!"
+
+    adoption = lane_body(source, "adopt_media")
+    assert_includes adoption, "nova_adopt_media!"
+    assert_includes source, "scripts/app_store/adopt_media.rb"
+    assert_includes source, "scripts/app_store/adopt_media_test.rb"
+    assert_includes File.binread(File.join(ROOT, ".gitignore")),
+                    "fastlane/asc_api_key.json"
+
   end
 
   def test_status_select_and_submission_helpers_are_fail_closed

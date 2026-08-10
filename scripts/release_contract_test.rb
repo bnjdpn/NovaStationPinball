@@ -10,7 +10,7 @@ require "yaml"
 class ReleaseContractTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
   REQUIRED_LANES = %w[
-    setup_asc release_contract asc_status metadata screenshots app_previews media_contract upload_screenshots
+    setup_asc release_contract asc_status metadata screenshots app_previews adopt_media media_contract upload_screenshots
     upload_previews build_release upload_release submit_review release_quick pricing
     iap_status iap_sync
   ].freeze
@@ -350,6 +350,8 @@ class ReleaseContractTest < Minitest::Test
       NovaStationCore/Tests/NovaStationCoreTests/NovaStationCoreTests.swift
       scripts/release_contract.rb scripts/release_contract_test.rb
       fastlane/Fastfile fastlane/Appfile fastlane/release_config.json
+      fastlane/media_adoption_contract.json
+      scripts/app_store/adopt_media.rb scripts/app_store/adopt_media_test.rb
       fastlane/metadata/en-US/support_url.txt
       fastlane/metadata/fr-FR/support_url.txt
       docs/index.html docs/privacy.html

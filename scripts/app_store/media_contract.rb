@@ -288,7 +288,7 @@ module NovaStationPinballMediaContract
   class SourceFingerprint
     EXCLUDED_PREFIXES = %w[
       .git/ .build/ .swiftpm/ Builds/ DerivedData/ .superpowers/
-      fastlane/report.xml docs/validation-report.md
+      fastlane/report.xml fastlane/asc_api_key.json docs/validation-report.md
     ].freeze
 
     def initialize(app_root)

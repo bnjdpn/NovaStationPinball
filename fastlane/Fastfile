@@ -178,6 +178,66 @@ def nova_generate_app_previews_if_missing!
   )
 end
 
+def nova_media_adoption_contract
+  relative = nova_config.dig("release_pipeline", "media_adoption_contract")
+  return nil unless relative.instance_of?(String) && !relative.empty?
+
+  path = File.expand_path(relative, nova_app_root)
+  unless path.start_with?("#{nova_app_root}#{File::SEPARATOR}") &&
+         File.file?(path) && !File.symlink?(path)
+    UI.user_error!("Media adoption contract must be a regular app-local file")
+  end
+  document = JSON.parse(File.binread(path))
+  document.fetch("release_run_id") == nova_run_id ? [path, document] : nil
+rescue JSON::ParserError, KeyError => error
+  UI.user_error!("Invalid media adoption contract: #{error.message}")
+end
+
+def nova_explicit_media_adoption?
+  !nova_media_adoption_contract.nil?
+end
+
+def nova_adopt_media!
+  contract_path, = nova_media_adoption_contract
+  UI.user_error!("No media adoption contract matches this release run") unless
+    contract_path
+  nova_prepare_paths!
+  receipt_path = nova_release_path("logs", "media-adoption.json")
+  sh(
+    RbConfig.ruby,
+    File.join(nova_app_root, "scripts/app_store/adopt_media.rb"),
+    "--repo-root", nova_app_root,
+    "--run-root", nova_release_root,
+    "--contract", contract_path,
+    "--candidate-id", nova_candidate_id,
+    "--output", receipt_path
+  )
+  receipt = JSON.parse(File.binread(receipt_path))
+  unless receipt.fetch("schema_version") == 1 &&
+         receipt.fetch("provenance_mode") == "adopted_from" &&
+         receipt.fetch("release_run_id") == nova_run_id &&
+         receipt.fetch("source_candidate_id") == nova_candidate_id &&
+         receipt.fetch("adoption_contract_sha256").match?(/\A[0-9a-f]{64}\z/) &&
+         receipt.dig("media", "screenshots", "count") == NOVA_SCREENSHOT_COUNT &&
+         receipt.dig("media", "previews", "count") == NOVA_PREVIEW_COUNT &&
+         receipt.fetch("media_candidate_id").match?(/\A[0-9a-f]{64}\z/)
+    UI.user_error!("Media adoption receipt identity is incomplete")
+  end
+  receipt
+rescue JSON::ParserError, KeyError => error
+  UI.user_error!("Invalid media adoption receipt: #{error.message}")
+end
+
+def nova_validate_media!
+  return nova_adopt_media! if nova_explicit_media_adoption?
+
+  sh(
+    RbConfig.ruby,
+    File.join(nova_app_root, "scripts/app_store/media_contract.rb"),
+    "--run-root", nova_release_root
+  )
+end
+
 def nova_load_api_key
   values = {
     key_id: ENV["APP_STORE_CONNECT_API_KEY_KEY_ID"].to_s,
@@ -358,6 +418,8 @@ platform :ios do
     sh(RbConfig.ruby, File.join(nova_app_root, "scripts/release_contract.rb"), "--check")
     %w[
       fastlane/release_support_test.rb
+      scripts/app_store/adopt_media_test.rb
+      scripts/app_store/setup_asc_test.rb
       scripts/app_store/wait_for_state_test.rb
       scripts/app_store/release_pipeline_contract_test.rb
     ].each do |relative|
@@ -410,6 +472,10 @@ platform :ios do
 
   desc "Generate the exact 36 localized screenshots from the six owned previews"
   lane :screenshots do
+    if nova_explicit_media_adoption?
+      nova_adopt_media!
+      next
+    end
     nova_prepare_paths!
     nova_generate_app_previews_if_missing!
     sh(
@@ -422,18 +488,22 @@ platform :ios do
 
   desc "Generate the exact six localized gameplay App Previews"
   lane :app_previews do
+    if nova_explicit_media_adoption?
+      nova_adopt_media!
+      next
+    end
     nova_prepare_paths!
     nova_generate_app_previews_if_missing!
   end
 
+  desc "Validate and adopt the exact frozen 36+6 media run without simulators"
+  lane :adopt_media do
+    nova_adopt_media!
+  end
+
   desc "Validate the exact EN/FR, three-device screenshot and preview matrix"
   lane :media_contract do
-    nova_prepare_paths!
-    sh(
-      RbConfig.ruby,
-      File.join(nova_app_root, "scripts/app_store/media_contract.rb"),
-      "--run-root", nova_release_root
-    )
+    nova_validate_media!
   end
 
   desc "Upload the frozen 36 screenshots exactly once and poll COMPLETE via GET"

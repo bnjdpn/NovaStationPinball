@@ -1319,6 +1319,26 @@ class NovaStationMediaContractTest < Minitest::Test
     end
   end
 
+  def test_source_fingerprint_ignores_only_the_exact_wrapper_credential_bridge
+    Dir.mktmpdir("nova-credential-bridge") do |root|
+      FileUtils.mkdir_p(File.join(root, "NovaStationPinball"))
+      FileUtils.mkdir_p(File.join(root, "fastlane"))
+      File.write(File.join(root, "NovaStationPinball", "Game.swift"), "let score = 1\n")
+      fingerprint = NovaStationPinballMediaContract::SourceFingerprint.new(root).value
+
+      File.write(File.join(root, "fastlane", "asc_api_key.json"), "secret one\n")
+      assert_equal fingerprint,
+                   NovaStationPinballMediaContract::SourceFingerprint.new(root).value
+      File.write(File.join(root, "fastlane", "asc_api_key.json"), "secret two\n")
+      assert_equal fingerprint,
+                   NovaStationPinballMediaContract::SourceFingerprint.new(root).value
+
+      File.write(File.join(root, "fastlane", "release_config.json"), "{}\n")
+      refute_equal fingerprint,
+                   NovaStationPinballMediaContract::SourceFingerprint.new(root).value
+    end
+  end
+
   def test_rejects_symlinked_media_artifact
     with_complete_run do |run_root, probe|
       manifest = read_manifest(run_root)

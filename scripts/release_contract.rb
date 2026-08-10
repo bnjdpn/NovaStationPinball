@@ -11,7 +11,7 @@ module NovaStationPinballReleaseContract
   REQUIRED_LOCALES = %w[en-US fr-FR].freeze
   REQUIRED_TIPS = %w[tip.cafe tip.merci tip.soutien].freeze
   REQUIRED_LANES = %w[
-    setup_asc release_contract asc_status metadata screenshots app_previews media_contract upload_screenshots
+    setup_asc release_contract asc_status metadata screenshots app_previews adopt_media media_contract upload_screenshots
     upload_previews build_release upload_release submit_review release_quick pricing
     iap_status iap_sync
   ].freeze
@@ -56,10 +56,14 @@ module NovaStationPinballReleaseContract
         NovaStationCore/Sources/NovaStationCore/NovaStationCore.swift
         NovaStationCore/Tests/NovaStationCoreTests/NovaStationCoreTests.swift
         fastlane/Fastfile fastlane/Appfile fastlane/release_config.json
+        fastlane/media_adoption_contract.json
         fastlane/metadata/en-US/support_url.txt
         fastlane/metadata/fr-FR/support_url.txt
         scripts/app_store/media_contract.rb
         scripts/app_store/media_contract_test.rb
+        scripts/app_store/adopt_media.rb
+        scripts/app_store/adopt_media_test.rb
+        scripts/app_store/setup_asc_test.rb
         scripts/app_store/media_generation.rb
         scripts/app_store/generate_screenshots.rb
         scripts/app_store/generate_app_previews.rb
@@ -336,7 +340,7 @@ module NovaStationPinballReleaseContract
       end
       error("App Preview UI test must receive the app-local handshake token") unless preview_test.include?("NOVA_MEDIA_HANDSHAKE_TOKEN")
       fastfile = File.read(path("fastlane/Fastfile"), encoding: "UTF-8")
-      %w[generate_screenshots.rb generate_app_previews.rb media_contract.rb].each do |script|
+      %w[generate_screenshots.rb generate_app_previews.rb media_contract.rb adopt_media.rb].each do |script|
         error("Fastlane media hook missing #{script}") unless fastfile.include?("scripts/app_store/#{script}")
       end
       %w[upload_screenshots upload_previews release_quick].each do |lane|

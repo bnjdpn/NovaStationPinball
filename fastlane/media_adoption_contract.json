@@ -1,0 +1,109 @@
+{
+  "schema_version": 2,
+  "app_slug": "NovaStationPinball",
+  "release_run_id": "20260810-nova-100-overlayguard-019fe558",
+  "baseline_head": "10a88967f740bada3789ba9d4c99edddb4db2ed1",
+  "source_revision": "d85dbcc0ab60980b482b39ababeff38e2346660b7fe409ce16e553bbf0cdeb13",
+  "screenshot_count": 36,
+  "preview_count": 6,
+  "media_proof": {
+    "screenshots": {
+      "count": 36,
+      "sha256": "cd6c361ed76c4c67e8cd58edfbc3baad3f38b684efbf1c66743900b693d95cd9"
+    },
+    "previews": {
+      "count": 6,
+      "sha256": "8da4763f6b3bdf93eb61a2130cbe2ab62420f4b723a819927c7ab8e221d6dc14"
+    },
+    "manifest": {
+      "count": 1,
+      "sha256": "700dfc369acc360c7fd932b7d0b519b4ddefd62405ec294914a68781a4e7bfae"
+    },
+    "system_overlay": {
+      "reports": 6,
+      "scanned_frames": 4320,
+      "violation_count": 0,
+      "semantic_sha256": "3d1fdbec4f0f74bbc59523642916b55c327c410759c7a1a6fda986b1d509d0a0"
+    },
+    "human_review": {
+      "count": 19,
+      "sha256": "17c9eb96ad71cd592a772092f1127ef942e4479ed342afd839bce79f2826cf0f",
+      "verdict": "PASS"
+    }
+  },
+  "allowed_source_changes": [
+    {
+      "path": ".gitignore",
+      "class": "release_tooling",
+      "before_sha256": "9bcc0e40a6ec3dea12f73fd241afb41c7588e30ab246c5b4bb08301fb89b5827",
+      "after_sha256": "e559ffec43e0f6900c2e85029ce3e95e06276a83a4db01c71905a61509ba9533"
+    },
+    {
+      "path": "fastlane/Fastfile",
+      "class": "release_tooling",
+      "before_sha256": "f904b7698ae85cfa91be08aad8b51dfb6fce893867ea1168cb7957107b097231",
+      "after_sha256": "d65f9eeec0a7206c5755a4c40d1a243165e230262ca7e42f2136d816c5dab260"
+    },
+    {
+      "path": "fastlane/release_config.json",
+      "class": "release_tooling",
+      "before_sha256": "7a6f2a3658cc741d0c3939877b14f843dca889e57527af3ed87ca5463bd51633",
+      "after_sha256": "dea1863aee3cee33962a44a97d70a7cc0ec96377bfa52fd6b802a464ec24ad4c"
+    },
+    {
+      "path": "scripts/app_store/adopt_media.rb",
+      "class": "release_tooling",
+      "before_sha256": null,
+      "after_sha256": "e24487a0cd38fedb604415fec6ff6ea62fe97990d0b2cbc1c8f568ce0cbad751"
+    },
+    {
+      "path": "scripts/app_store/adopt_media_test.rb",
+      "class": "release_tooling",
+      "before_sha256": null,
+      "after_sha256": "776b90489b4479a660c92b87b9d57630404030f3fc1ec021e344b0d625e1c9a9"
+    },
+    {
+      "path": "scripts/app_store/media_contract.rb",
+      "class": "release_tooling",
+      "before_sha256": "2bded63251981a60795f74329a2b9ae26e6d1c9f44249fd3f91e68ee03d95eed",
+      "after_sha256": "b8bf746d80ca217d7a6e4204077d369066da01a7370574068927e9e899c2f6d2"
+    },
+    {
+      "path": "scripts/app_store/media_contract_test.rb",
+      "class": "release_tooling",
+      "before_sha256": "607efe467f37305d306f061c3cf9f053dd3be048841386db7dca0e9627d8c385",
+      "after_sha256": "a5946378b58786a497dcc75da6b4b3c7fc7e043cc5a0af18a1a1d2bd220c32fb"
+    },
+    {
+      "path": "scripts/app_store/release_pipeline_contract_test.rb",
+      "class": "release_tooling",
+      "before_sha256": "22647ed18a3ff75d4815efec284eac110b12650559b2dbe906dc6524fff3f3ee",
+      "after_sha256": "0cfe6733dc40c15d870d8a78312abd93eb7b33ed2011023e07e01c0d20973552"
+    },
+    {
+      "path": "scripts/app_store/setup_asc.rb",
+      "class": "release_tooling",
+      "before_sha256": "61bc0d81718473ce9d00279918a0aca2644bd60975c0d4312b2b00d713391c49",
+      "after_sha256": "6c13b5812f585b8520359ae3837670e647ac06a1364171d9d09b02afec957265"
+    },
+    {
+      "path": "scripts/app_store/setup_asc_test.rb",
+      "class": "release_tooling",
+      "before_sha256": null,
+      "after_sha256": "fb4fed0994cdb823e31205d5437643bf70b13b51b1f454703dea2d6277f4f0dc"
+    },
+    {
+      "path": "scripts/release_contract.rb",
+      "class": "release_tooling",
+      "before_sha256": "9546ce26910e7bf768bd182111857debb0f7c4b6ad2921f7dbd743564a2df28e",
+      "after_sha256": "38cabce26c904adcfcc9048c414d32dd60755e571e78327430c4dc5d839bca1c"
+    },
+    {
+      "path": "scripts/release_contract_test.rb",
+      "class": "release_tooling",
+      "before_sha256": "ed04e93c246c1e7b113abb41375699a457556a88651f7f1911064266d5b42db9",
+      "after_sha256": "82869bec5b1728d9fd3859cb0f9f98892665ed27ff508d0a67bb39847cb07d5d"
+    }
+  ],
+  "contract_self_sha256": "c93c8b57a1c569b456ac93a832b6042bac76fd5eb9d31303ca20ce411231ca44"
+}

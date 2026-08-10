@@ -10,3 +10,5 @@ xcuserdata/
 *.p8
 fastlane/report.xml
 fastlane/test_output/
+/fastlane/asc_api_key.json
+!/fastlane/asc_api_key.json/
