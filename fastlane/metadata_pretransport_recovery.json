@@ -1,133 +1,94 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "app_slug": "NovaStationPinball",
   "release_run_id": "20260810-nova-100-official-545d2d2a-precompute",
-  "baseline_head": "262f6f213ae808a28871b3723de48838a8046ab6",
-  "baseline_contract_sha256": "86b5d42e02a8a96e35227a5a8ede6fe2581fbe947d38d25d5734b449c22dd496",
-  "lineage": {
-    "mode": "successive",
-    "previous_head": "262f6f213ae808a28871b3723de48838a8046ab6",
-    "previous_contract_sha256": "86b5d42e02a8a96e35227a5a8ede6fe2581fbe947d38d25d5734b449c22dd496"
+  "historical_head": "262f6f213ae808a28871b3723de48838a8046ab6",
+  "historical_candidate_id": "ead006d2f2f3d776e65b8bc7cc43be82b062da2635f031b2b08a4c8ea7f65fc6",
+  "historical_adoption_contract_sha256": "86b5d42e02a8a96e35227a5a8ede6fe2581fbe947d38d25d5734b449c22dd496",
+  "metadata_expected_sha256": "69a0af8e1e3bea0fa587a71a4edd7dbb842797945cfb1a669db6fd72087f6a20",
+  "pretransport_proof": {
+    "proven": true,
+    "configuration_error": "Error setting value './metadata/app_rating_config.json' for option 'app_rating_config_path'",
+    "invalid_parameters_error": "You passed invalid parameters to 'upload_to_app_store'.",
+    "wrapper_classification": "metadata transport returned ambiguously after its intent was recorded (FastlaneCore::Interface::FastlaneError)",
+    "action_run_called": false
   },
-  "source_revision": "545d2d2a4fcd1f0748954c4b7b53a5a4698d261ab97f86a4b9a0153ae9ff98d0",
-  "screenshot_count": 36,
-  "preview_count": 6,
-  "media_proof": {
-    "screenshots": {
-      "count": 36,
-      "sha256": "84046113af2d7c4024d3ed7b6edadbc8d1945244a6940369609b26b1390567a5"
-    },
-    "previews": {
-      "count": 6,
-      "sha256": "9e425544407a30cfc283f27d5fe56d8070efea60eafe38baa6315b90e2ac262d"
-    },
-    "manifest": {
-      "count": 1,
-      "sha256": "809bfcbe78707052c19f035aee409f16c15b9937ebcfd0005e23bd597f5becb5"
-    },
-    "system_overlay": {
-      "reports": 6,
-      "scanned_frames": 4320,
-      "violation_count": 0,
-      "semantic_sha256": "759b80752a7008a9cd053ddbe4d21990c6474ad7f6191b28403c6e84591ac86e"
-    },
-    "human_review": {
-      "count": 19,
-      "sha256": "4a9009d720a2a30cfaed1c2565589dbbe750b88d44c277440ef6a71a29f12f5f",
-      "verdict": "PASS"
-    }
+  "active_files": {
+    "media-adoption.json": "1b9f0d73be6064404a87bb9944438436ce90d3a84356faace6c06e7971da5ab4",
+    "metadata-upload-intent.json": "60515b8cee1849f48c2cfb84f34696c2f5ae14a29d5f464db6bc0468d4db8303",
+    "release-checkpoints.json": "542e62f97a527643b043673a1991d42712bc2d49fa3c0248e866d7c129459971"
   },
-  "allowed_source_changes": [
+  "source_changes": [
     {
       "path": "fastlane/Fastfile",
-      "class": "release_tooling",
       "before_sha256": "d65f9eeec0a7206c5755a4c40d1a243165e230262ca7e42f2136d816c5dab260",
       "after_sha256": "5b6dd34389a2df02a1efbcd916c7d1e8d0326dbe10bf5433ec0772b2bc19fbc6"
     },
     {
       "path": "fastlane/metadata_preflight.rb",
-      "class": "release_tooling",
       "before_sha256": null,
       "after_sha256": "5ece701d41b29cccf330b16905b5203ac76b0a902a909a0a1a53e1dc17bab950"
     },
     {
       "path": "fastlane/metadata_preflight_test.rb",
-      "class": "release_tooling",
       "before_sha256": null,
       "after_sha256": "a2136362a987b09d43ef896f65dd100b9ce793a4a4070db514fa5bb18d6b0447"
     },
     {
-      "path": "fastlane/metadata_pretransport_recovery.json",
-      "class": "release_tooling",
-      "before_sha256": null,
-      "after_sha256": "50028df334b2760c80399ce3c153373a02d4e563a9d28c01248ca550f3cbd9ad"
-    },
-    {
       "path": "fastlane/release_support.rb",
-      "class": "release_tooling",
       "before_sha256": "1224df46e9c65880e202d1409b0abab2d73ce6951acb8e04f67d426d4165465b",
       "after_sha256": "f0e698ce4d2ec51d17ec384b2d46d253904e56045e84d9ec9ceb47d3a01d51d0"
     },
     {
       "path": "fastlane/release_support_test.rb",
-      "class": "release_tooling",
       "before_sha256": "dd657e802f01a587496769a04a356c14b7eab0258c0ec2021679870f375010a2",
       "after_sha256": "7368c47016890e4bb713f7db7ab5ededba45a61026f551ac22f2a3fb4c93cb1a"
     },
     {
       "path": "scripts/app_store/adopt_media.rb",
-      "class": "release_tooling",
       "before_sha256": "1c26a7af779f6acd3bfe8539a3ddc6b6e5622bcfe71a0b95f2240e7e85f96930",
       "after_sha256": "6182f2a319ecf1bdf77732075f1e2382ec41799e071a1d1e1d59b8de6ac303b3"
     },
     {
       "path": "scripts/app_store/adopt_media_test.rb",
-      "class": "release_tooling",
       "before_sha256": "283e500865ebdd48f922a80cf475900cc07f628ef886405b471762aedc36a593",
       "after_sha256": "da6254e1a38c8ccac00f674bfd5a6ff153fa5ff9bd1138ec2668c79555840ebd"
     },
     {
       "path": "scripts/app_store/client.rb",
-      "class": "release_tooling",
       "before_sha256": "8bd66ebfb1721f3dcfed41fde3d54ff7b10990c038702340a7c12f5390f21ed8",
       "after_sha256": "d22bc3f82f28f05fceb1d0ee2e30fcd150a3322242e99f5f3d6320b4a852ad4e"
     },
     {
       "path": "scripts/app_store/client_test.rb",
-      "class": "release_tooling",
       "before_sha256": null,
       "after_sha256": "c782d13e78413a02c1aa6363c957333a5023045559525acafef3443e636f8dd0"
     },
     {
       "path": "scripts/app_store/metadata_pretransport_recovery.rb",
-      "class": "release_tooling",
       "before_sha256": null,
       "after_sha256": "7689793d47a219037f048cc07f0ba0b3cb6c56b1946a30af5213a412f6385d01"
     },
     {
       "path": "scripts/app_store/metadata_pretransport_recovery_test.rb",
-      "class": "release_tooling",
       "before_sha256": null,
       "after_sha256": "2a44aee65f60a419ebba691ba2858984b66edf05b604cddea3e91e447d4a51e6"
     },
     {
       "path": "scripts/app_store/release_pipeline_contract_test.rb",
-      "class": "release_tooling",
       "before_sha256": "56b0f195fd063aa420729becc660f580970e0d8c56853b60993a218689116453",
       "after_sha256": "8b203e0bf149edc87ce1e7d690dc927437dc8d8dcd1666dcfe1743c249dad6a5"
     },
     {
       "path": "scripts/release_contract.rb",
-      "class": "release_tooling",
       "before_sha256": "8ab42f102ea30f769dc00789be53df7026ed94bae49bb30ac8a366f688c752f7",
       "after_sha256": "706a744194925df67886a959ea7f6263239bea90ac247693dd697f9a018031db"
     },
     {
       "path": "scripts/release_contract_test.rb",
-      "class": "release_tooling",
       "before_sha256": "1f40b1ece1fca61a3efb7ce0c8cf0ffee8f5fe67ab6a94f414e59c0a0b843809",
       "after_sha256": "6c7777edb8d80fa0afa6b9b0077dd2cdb5b71f522bffb2c079f0337790fdad6c"
     }
   ],
-  "contract_self_sha256": "1f0f91da48a89744968f1c3e6595f923b9063746b61de012d056c1550f869a68"
+  "contract_self_sha256": "28c27eb903c645cf63506c04d3054ff2365c7b03f87a3212e224bcb5df29ac0a"
 }

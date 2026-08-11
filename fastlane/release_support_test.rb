@@ -44,6 +44,25 @@ class NovaStationPinballReleaseSupportTest < Minitest::Test
     end
   end
 
+  def test_pretransport_failure_is_not_attempted_and_writes_no_intent
+    Dir.mktmpdir do |root|
+      identity = proof_identity(root, kind: "metadata")
+      error = assert_raises(
+        NovaStationPinballReleaseSupport::PretransportFailure
+      ) do
+        NovaStationPinballReleaseSupport.transport_once!(
+          **identity,
+          preflight: -> { raise ArgumentError, "metadata path is relative" }
+        ) { flunk "transport must not run" }
+      end
+
+      assert_equal "metadata", error.kind
+      assert_equal :not_attempted, error.state
+      refute File.exist?(identity.fetch(:intent_path))
+      refute File.exist?(identity.fetch(:receipt_path))
+    end
+  end
+
   def test_proof_rejects_candidate_or_payload_drift
     Dir.mktmpdir do |root|
       identity = proof_identity(root, kind: "screenshots")

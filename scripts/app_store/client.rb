@@ -3,7 +3,6 @@
 
 require "json"
 require "net/http"
-require "spaceship"
 require "uri"
 
 module NovaStationPinballAscCredentials
@@ -21,6 +20,7 @@ module NovaStationPinballAscCredentials
   end
 
   def token(key_path: nil)
+    require "spaceship"
     if key_path && File.file?(key_path) && !File.symlink?(key_path)
       return Spaceship::ConnectAPI::Token.from(filepath: key_path)
     end
@@ -54,8 +54,20 @@ end
 class NovaStationPinballAscClient
   BASE_URL = "https://api.appstoreconnect.apple.com"
 
-  def initialize(key_path: nil, token: nil)
-    @token = token || NovaStationPinballAscCredentials.token(key_path: key_path)
+  def initialize(key_path: nil, token: nil, token_factory: nil, request_runner: nil)
+    if token && token_factory
+      raise ArgumentError, "Provide either a fixed token or a token factory"
+    end
+    @token_factory = token_factory || if token
+                                        -> { token }
+                                      else
+                                        -> {
+                                          NovaStationPinballAscCredentials.token(
+                                            key_path: key_path
+                                          )
+                                        }
+                                      end
+    @request_runner = request_runner || method(:perform_request)
   end
 
   def get(path, params = {}, optional: false)
@@ -106,13 +118,15 @@ class NovaStationPinballAscClient
     attempt = 0
     loop do
       request = request_class.new(uri)
-      request["Authorization"] = "Bearer #{@token.text}"
+      token = @token_factory.call
+      unless token.respond_to?(:text) && !token.text.to_s.empty?
+        raise ArgumentError, "ASC token factory returned an invalid token"
+      end
+      request["Authorization"] = "Bearer #{token.text}"
       request["Accept"] = "application/json"
       request["Content-Type"] = "application/json"
       request.body = JSON.generate(body) if body
-      response = Net::HTTP.start(
-        uri.host, uri.port, use_ssl: true, open_timeout: 30, read_timeout: 120
-      ) { |http| http.request(request) }
+      response = @request_runner.call(uri, request)
       return {} if response.is_a?(Net::HTTPNoContent)
       return JSON.parse(response.body) if response.is_a?(Net::HTTPSuccess)
       return nil if optional && response.code == "404"
@@ -136,5 +150,11 @@ class NovaStationPinballAscClient
       status: "invalid-json",
       body: error.message
     )
+  end
+
+  def perform_request(uri, request)
+    Net::HTTP.start(
+      uri.host, uri.port, use_ssl: true, open_timeout: 30, read_timeout: 120
+    ) { |http| http.request(request) }
   end
 end

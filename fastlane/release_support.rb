@@ -20,9 +20,21 @@ module NovaStationPinballReleaseSupport
     end
   end
 
+  class PretransportFailure < StandardError
+    attr_reader :kind, :state, :error_class
+
+    def initialize(kind, error)
+      @kind = kind
+      @state = :not_attempted
+      @error_class = error.class.name
+      super("#{kind} was not attempted because local preflight failed: #{error.message}")
+    end
+  end
+
   module_function
 
-  def transport_once!(intent_path:, receipt_path:, kind:, candidate_id:, version:, payload:)
+  def transport_once!(intent_path:, receipt_path:, kind:, candidate_id:, version:, payload:,
+                      preflight: nil)
     intent = proof_document(
       phase: "intent", kind: kind, candidate_id: candidate_id,
       version: version, payload: payload
@@ -32,6 +44,12 @@ module NovaStationPinballReleaseSupport
       read_exact!(intent_path, intent)
       read_exact!(receipt_path, receipt)
       return :observed
+    end
+
+    begin
+      preflight.call if preflight
+    rescue StandardError => error
+      raise PretransportFailure.new(kind, error)
     end
 
     created = write_once!(intent_path, intent)

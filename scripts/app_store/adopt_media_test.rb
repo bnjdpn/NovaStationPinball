@@ -52,6 +52,58 @@ class NovaStationPinballMediaAdoptionTest < Minitest::Test
     end
   end
 
+  def test_successive_schema_two_contract_binds_the_previous_valid_contract
+    with_fixture do |fixture|
+      repo = fixture.fetch(:repo)
+      previous_head = fixture.fetch(:head)
+      previous_contract_sha256 = Digest::SHA256.file(
+        fixture.fetch(:contract_path)
+      ).hexdigest
+      successor_path = File.join(
+        repo, "scripts", "app_store", "metadata_recovery.rb"
+      )
+      File.write(successor_path, "absolute metadata preflight\n")
+      contract = JSON.parse(File.binread(fixture.fetch(:contract_path)))
+      contract["baseline_head"] = previous_head
+      contract["baseline_contract_sha256"] = previous_contract_sha256
+      contract["lineage"] = {
+        "mode" => "successive",
+        "previous_head" => previous_head,
+        "previous_contract_sha256" => previous_contract_sha256
+      }
+      contract["allowed_source_changes"] = [{
+        "path" => "scripts/app_store/metadata_recovery.rb",
+        "class" => "release_tooling",
+        "before_sha256" => nil,
+        "after_sha256" => Digest::SHA256.file(successor_path).hexdigest
+      }]
+      contract["contract_self_sha256"] = Digest::SHA256.hexdigest(
+        JSON.generate(
+          NovaStationPinballMediaAdoption.canonical(
+            contract.reject { |key, _| key == "contract_self_sha256" }
+          )
+        )
+      )
+      File.write(
+        fixture.fetch(:contract_path), JSON.pretty_generate(contract) + "\n"
+      )
+      git!(repo, "add", "fastlane", "scripts")
+      git!(repo, "commit", "-q", "-m", "successive recovery tooling")
+      candidate = NovaStationPinballMediaAdoption.candidate_id(repo)
+      adoption = NovaStationPinballMediaAdoption::Contract.new(
+        **fixture.fetch(:arguments).merge(candidate_id: candidate)
+      )
+
+      receipt = adoption.validate!(write_receipt: false)
+
+      assert_equal "successive", receipt.dig("lineage", "mode")
+      assert_equal previous_head, receipt.dig("lineage", "previous_head")
+      assert_equal previous_contract_sha256,
+                   receipt.dig("lineage", "previous_contract_sha256")
+      refute File.exist?(fixture.fetch(:output))
+    end
+  end
+
   def test_adoption_rejects_a_wrong_baseline_contract_lineage
     with_fixture(baseline_contract_sha256: "f" * 64) do |fixture|
       assert_raises(NovaStationPinballMediaAdoption::AdoptionError) do

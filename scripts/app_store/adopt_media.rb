@@ -30,11 +30,13 @@ module NovaStationPinballMediaAdoption
       ]
     end
   ).sort.freeze
-  CONTRACT_KEYS = %w[
+  LEGACY_CONTRACT_KEYS = %w[
     allowed_source_changes app_slug baseline_contract_sha256 baseline_head
     contract_self_sha256 media_proof preview_count release_run_id schema_version
     screenshot_count source_revision
   ].freeze
+  CONTRACT_KEYS = (LEGACY_CONTRACT_KEYS + ["lineage"]).sort.freeze
+  LINEAGE_KEYS = %w[mode previous_contract_sha256 previous_head].freeze
   SOURCE_CHANGE_KEYS = %w[
     after_sha256 before_sha256 class path
   ].freeze
@@ -172,6 +174,38 @@ module NovaStationPinballMediaAdoption
     digest
   end
 
+  def validate_contract_document!(document, require_successive: false)
+    keys = document.instance_of?(Hash) ? document.keys.sort : []
+    valid_keys = keys == LEGACY_CONTRACT_KEYS.sort || keys == CONTRACT_KEYS
+    valid = valid_keys && document["schema_version"] == 2 &&
+      document["app_slug"] == APP_SLUG &&
+      document["release_run_id"].to_s.match?(RUN_ID) &&
+      document["baseline_head"].to_s.match?(COMMIT) &&
+      document["baseline_contract_sha256"].to_s.match?(SHA256) &&
+      document["source_revision"].to_s.match?(SHA256) &&
+      document["screenshot_count"] == 36 && document["preview_count"] == 6
+    raise AdoptionError, "media adoption contract is incomplete or inexact" unless valid
+
+    lineage = document["lineage"]
+    if require_successive && lineage.nil?
+      raise AdoptionError, "successive media adoption lineage is required"
+    end
+    if lineage
+      valid_lineage = lineage.instance_of?(Hash) &&
+        lineage.keys.sort == LINEAGE_KEYS &&
+        lineage["mode"] == "successive" &&
+        lineage["previous_head"] == document["baseline_head"] &&
+        lineage["previous_contract_sha256"] ==
+          document["baseline_contract_sha256"]
+      raise AdoptionError, "successive media adoption lineage is not exact" unless
+        valid_lineage
+    end
+    exact_source_change_records!(document.fetch("allowed_source_changes"))
+    validate_media_proof_schema!(document.fetch("media_proof"))
+    validate_contract_self_digest!(document)
+    document
+  end
+
   def exact_source_change_records!(value)
     unless value.instance_of?(Array) && !value.empty? &&
            value.all? { |item| item.instance_of?(Hash) }
@@ -307,6 +341,7 @@ module NovaStationPinballMediaAdoption
         "release_run_id" => contract.fetch("release_run_id"),
         "baseline_head" => contract.fetch("baseline_head"),
         "baseline_contract_sha256" => contract.fetch("baseline_contract_sha256"),
+        "lineage" => contract["lineage"] || { "mode" => "direct" },
         "release_head" => release_head,
         "source_revision" => contract.fetch("source_revision"),
         "source_candidate_id" => @candidate_id,
@@ -330,25 +365,9 @@ module NovaStationPinballMediaAdoption
         raise AdoptionError, "media adoption contract must be a regular file"
       end
       document = JSON.parse(File.binread(@contract_path))
-      unless document.instance_of?(Hash) && document.keys.sort == CONTRACT_KEYS &&
-             document["schema_version"] == 2 &&
-             document["app_slug"] == APP_SLUG &&
-             document["release_run_id"].to_s.match?(RUN_ID) &&
-             document["baseline_head"].to_s.match?(COMMIT) &&
-             document["baseline_contract_sha256"].to_s.match?(SHA256) &&
-             document["source_revision"].to_s.match?(SHA256) &&
-             document["screenshot_count"] == 36 &&
-             document["preview_count"] == 6
-        raise AdoptionError, "media adoption contract is incomplete or inexact"
-      end
-      NovaStationPinballMediaAdoption.exact_source_change_records!(
-        document.fetch("allowed_source_changes")
+      NovaStationPinballMediaAdoption.validate_contract_document!(
+        document
       )
-      NovaStationPinballMediaAdoption.validate_media_proof_schema!(
-        document.fetch("media_proof")
-      )
-      NovaStationPinballMediaAdoption.validate_contract_self_digest!(document)
-      document
     rescue JSON::ParserError => error
       raise AdoptionError, "invalid media adoption contract: #{error.message}"
     end
@@ -376,18 +395,24 @@ module NovaStationPinballMediaAdoption
         @repo_root, "rev-parse", "--verify", "#{baseline}^{commit}"
       ).strip
       raise AdoptionError, "baseline head did not resolve exactly" unless resolved == baseline
-      unless NovaStationPinballMediaAdoption.source_fingerprint_at_commit(
-        @repo_root, baseline
-      ) == contract.fetch("source_revision")
-        raise AdoptionError,
-              "baseline head does not match the adopted source fingerprint"
-      end
-      NovaStationPinballMediaAdoption.git!(
-        @repo_root, "merge-base", "--is-ancestor", baseline, "HEAD"
-      )
       release_head = NovaStationPinballMediaAdoption.git!(
         @repo_root, "rev-parse", "HEAD"
       ).strip
+      proof = validate_contract_transition!(
+        contract,
+        release_head: release_head,
+        expected_after_contract_sha256: Digest::SHA256.file(@contract_path).hexdigest
+      )
+      [release_head, proof]
+    end
+
+    def validate_contract_transition!(contract, release_head:,
+                                      expected_after_contract_sha256:)
+      baseline = contract.fetch("baseline_head")
+      validate_baseline_lineage!(contract)
+      NovaStationPinballMediaAdoption.git!(
+        @repo_root, "merge-base", "--is-ancestor", baseline, release_head
+      )
       changes = changed_paths(baseline, release_head)
       expected_records = contract.fetch("allowed_source_changes")
       expected_paths = expected_records.map { |item| item.fetch("path") }
@@ -416,7 +441,7 @@ module NovaStationPinballMediaAdoption
         @repo_root, release_head, CONTRACT_PATH
       )
       unless contract_before == contract.fetch("baseline_contract_sha256") &&
-             contract_after == Digest::SHA256.file(@contract_path).hexdigest
+             contract_after == expected_after_contract_sha256
         raise AdoptionError,
               "adoption contract does not continue the exact canonical baseline contract"
       end
@@ -426,7 +451,58 @@ module NovaStationPinballMediaAdoption
         "before_sha256" => contract_before,
         "after_sha256" => contract_after
       }
-      [release_head, proof.sort_by { |item| item.fetch("path") }]
+      proof.sort_by { |item| item.fetch("path") }
+    end
+
+    def validate_baseline_lineage!(contract)
+      baseline = contract.fetch("baseline_head")
+      if contract["lineage"].nil?
+        unless NovaStationPinballMediaAdoption.source_fingerprint_at_commit(
+          @repo_root, baseline
+        ) == contract.fetch("source_revision")
+          raise AdoptionError,
+                "baseline head does not match the adopted source fingerprint"
+        end
+        return true
+      end
+
+      previous_sha256 = contract.fetch("baseline_contract_sha256")
+      previous, previous_bytes_sha256 = contract_document_at_commit(baseline)
+      NovaStationPinballMediaAdoption.validate_contract_document!(previous)
+      shared = %w[
+        app_slug media_proof preview_count release_run_id screenshot_count
+        source_revision
+      ]
+      unless shared.all? { |key| previous[key] == contract[key] } &&
+             previous_bytes_sha256 == previous_sha256
+        raise AdoptionError,
+              "previous adoption contract does not bind the same frozen media"
+      end
+      validate_contract_transition!(
+        previous,
+        release_head: baseline,
+        expected_after_contract_sha256: previous_sha256
+      )
+      true
+    end
+
+    def contract_document_at_commit(commit)
+      rows = NovaStationPinballMediaAdoption.git!(
+        @repo_root, "ls-tree", "-z", commit, "--", CONTRACT_PATH
+      ).split("\0", -1).reject(&:empty?)
+      raise AdoptionError, "previous adoption contract is missing or ambiguous" unless
+        rows.length == 1
+      metadata, observed = rows.first.split("\t", 2)
+      mode, type, object = metadata.to_s.split(" ", 3)
+      unless observed == CONTRACT_PATH && type == "blob" && mode != "120000"
+        raise AdoptionError, "previous adoption contract is not a regular blob"
+      end
+      bytes = NovaStationPinballMediaAdoption.git!(
+        @repo_root, "cat-file", "blob", object
+      )
+      [JSON.parse(bytes), Digest::SHA256.hexdigest(bytes)]
+    rescue JSON::ParserError => error
+      raise AdoptionError, "invalid previous adoption contract: #{error.message}"
     end
 
     def changed_paths(baseline, release_head)

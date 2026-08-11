@@ -492,7 +492,11 @@ class ReleaseContractTest < Minitest::Test
       scripts/release_contract.rb scripts/release_contract_test.rb
       fastlane/Fastfile fastlane/Appfile fastlane/release_config.json
       fastlane/media_adoption_contract.json
+      fastlane/metadata_preflight.rb
+      fastlane/metadata_pretransport_recovery.json
       scripts/app_store/adopt_media.rb scripts/app_store/adopt_media_test.rb
+      scripts/app_store/metadata_pretransport_recovery.rb
+      scripts/app_store/metadata_pretransport_recovery_test.rb
       fastlane/metadata/en-US/support_url.txt
       fastlane/metadata/fr-FR/support_url.txt
       docs/index.html docs/privacy.html

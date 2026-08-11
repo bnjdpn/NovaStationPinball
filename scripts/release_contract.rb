@@ -11,7 +11,7 @@ module NovaStationPinballReleaseContract
   REQUIRED_LOCALES = %w[en-US fr-FR].freeze
   REQUIRED_TIPS = %w[tip.cafe tip.merci tip.soutien].freeze
   REQUIRED_LANES = %w[
-    setup_asc release_contract asc_status metadata screenshots app_previews adopt_media media_contract upload_screenshots
+    setup_asc release_contract asc_status metadata recover_metadata_pretransport screenshots app_previews adopt_media media_contract upload_screenshots
     upload_previews build_release upload_release submit_review release_quick pricing
     iap_status iap_sync
   ].freeze
@@ -59,12 +59,17 @@ module NovaStationPinballReleaseContract
         NovaStationCore/Tests/NovaStationCoreTests/NovaStationCoreTests.swift
         fastlane/Fastfile fastlane/Appfile fastlane/release_config.json
         fastlane/media_adoption_contract.json
+        fastlane/metadata_preflight.rb
+        fastlane/metadata_pretransport_recovery.json
         fastlane/metadata/en-US/support_url.txt
         fastlane/metadata/fr-FR/support_url.txt
         scripts/app_store/media_contract.rb
         scripts/app_store/media_contract_test.rb
         scripts/app_store/adopt_media.rb
         scripts/app_store/adopt_media_test.rb
+        scripts/app_store/client_test.rb
+        scripts/app_store/metadata_pretransport_recovery.rb
+        scripts/app_store/metadata_pretransport_recovery_test.rb
         scripts/app_store/setup_asc_test.rb
         scripts/app_store/media_generation.rb
         scripts/app_store/generate_screenshots.rb

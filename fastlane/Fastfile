@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "cfpropertylist"
+require "bundler"
 require "digest"
 require "fileutils"
 require "json"
@@ -10,6 +11,7 @@ require "rbconfig"
 require "shellwords"
 require "zip"
 require_relative "release_support"
+require_relative "metadata_preflight"
 require File.expand_path("../scripts/app_store/metadata_readback.rb", __dir__)
 
 default_platform(:ios)
@@ -314,13 +316,34 @@ def nova_mutation_proof(kind, payload)
   }
 end
 
-def nova_transport_once(proof)
-  NovaStationPinballReleaseSupport.transport_once!(**proof) { yield }
+def nova_transport_once(proof, preflight: nil)
+  NovaStationPinballReleaseSupport.transport_once!(
+    **proof, preflight: preflight
+  ) { yield }
+rescue NovaStationPinballReleaseSupport::PretransportFailure => error
+  UI.user_error!("#{error.message} (state=#{error.state})")
 rescue NovaStationPinballReleaseSupport::AmbiguousTransport => error
   UI.important(
     "#{error.message} (#{error.error_class}); resuming with GET-only verification"
   )
   :get_only
+end
+
+def nova_metadata_paths!
+  NovaStationPinballMetadataPreflight.resolve!(
+    root: nova_app_root, config: nova_config
+  )
+rescue ArgumentError => error
+  UI.user_error!(error.message)
+end
+
+def nova_metadata_preflight!(expected_paths, expected_payload)
+  observed_paths = nova_metadata_paths!
+  unless observed_paths == expected_paths &&
+         nova_metadata_payload == expected_payload
+    UI.user_error!("Metadata bytes or absolute delivery paths changed before intent")
+  end
+  true
 end
 
 def nova_target_build_path
@@ -418,7 +441,9 @@ platform :ios do
     sh(RbConfig.ruby, File.join(nova_app_root, "scripts/release_contract.rb"), "--check")
     %w[
       fastlane/release_support_test.rb
+      scripts/app_store/client_test.rb
       scripts/app_store/adopt_media_test.rb
+      scripts/app_store/metadata_pretransport_recovery_test.rb
       scripts/app_store/setup_asc_test.rb
       scripts/app_store/wait_for_state_test.rb
       scripts/app_store/release_pipeline_contract_test.rb
@@ -428,6 +453,12 @@ platform :ios do
         "-u", "BUNDLE_GEMFILE", "-u", "GEM_HOME", "-u", "GEM_PATH",
         "/usr/bin/ruby",
         File.join(nova_app_root, relative)
+      )
+    end
+    Bundler.with_unbundled_env do
+      sh(
+        "/opt/homebrew/bin/ruby",
+        File.join(nova_app_root, "fastlane/metadata_preflight_test.rb")
       )
     end
   end
@@ -443,16 +474,23 @@ platform :ios do
   desc "Upload the frozen English and French metadata exactly once"
   lane :metadata do
     nova_prepare_paths!
+    metadata_paths = nova_metadata_paths!
     api_key = nova_load_api_key
     metadata_payload = nova_metadata_payload
     upload_proof = nova_mutation_proof("metadata", metadata_payload)
-    nova_transport_once(upload_proof) do
+    nova_transport_once(
+      upload_proof,
+      preflight: -> {
+        nova_metadata_preflight!(metadata_paths, metadata_payload)
+      }
+    ) do
       upload_to_app_store(
         api_key: api_key,
         app_identifier: NOVA_BUNDLE_ID,
         app_version: nova_config.fetch("version"),
-        metadata_path: File.join(__dir__, "metadata"),
-        app_rating_config_path: File.join(__dir__, "metadata", "app_rating_config.json"),
+        metadata_path: metadata_paths.fetch(:metadata_path),
+        app_rating_config_path:
+          metadata_paths.fetch(:app_rating_config_path),
         skip_binary_upload: true,
         skip_screenshots: true,
         submit_for_review: false,
@@ -468,6 +506,15 @@ platform :ios do
     end
     nova_wait_for_state!("metadata", timeout: 900)
     NovaStationPinballReleaseSupport.mark_observed!(**upload_proof)
+  end
+
+  desc "Archive and clear the exact historical local-only metadata intent"
+  lane :recover_metadata_pretransport do
+    nova_run_asc_tool(
+      "metadata_pretransport_recovery", "--run-id", nova_run_id,
+      "--contract",
+      File.join(nova_app_root, "fastlane", "metadata_pretransport_recovery.json")
+    )
   end
 
   desc "Generate the exact 36 localized screenshots from the six owned previews"

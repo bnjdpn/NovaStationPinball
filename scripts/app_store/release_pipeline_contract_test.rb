@@ -4,6 +4,7 @@ require "digest"
 require "json"
 require "minitest/autorun"
 require_relative "adopt_media"
+require_relative "metadata_pretransport_recovery"
 
 class NovaStationPinballReleasePipelineContractTest < Minitest::Test
   ROOT = File.expand_path("../..", __dir__)
@@ -64,9 +65,9 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_equal "NovaStationPinball", contract.fetch("app_slug")
     assert_equal "20260810-nova-100-official-545d2d2a-precompute",
                  contract.fetch("release_run_id")
-    assert_equal "b80afffac456388c21088b189a49c48da121d543",
+    assert_equal "262f6f213ae808a28871b3723de48838a8046ab6",
                  contract.fetch("baseline_head")
-    assert_equal "a2e195067298a7b07a4f2de011290d584efd4b1d7c30f69950b60a53ecfdfa0e",
+    assert_equal "86b5d42e02a8a96e35227a5a8ede6fe2581fbe947d38d25d5734b449c22dd496",
                  contract.fetch("baseline_contract_sha256")
     assert_equal "545d2d2a4fcd1f0748954c4b7b53a5a4698d261ab97f86a4b9a0153ae9ff98d0",
                  contract.fetch("source_revision")
@@ -98,17 +99,58 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     ), contract.fetch("contract_self_sha256")
     changes = contract.fetch("allowed_source_changes")
     assert_equal %w[
-      fastlane/release_config.json
+      fastlane/Fastfile
+      fastlane/metadata_preflight.rb
+      fastlane/metadata_preflight_test.rb
+      fastlane/metadata_pretransport_recovery.json
+      fastlane/release_support.rb
+      fastlane/release_support_test.rb
       scripts/app_store/adopt_media.rb
       scripts/app_store/adopt_media_test.rb
+      scripts/app_store/client.rb
+      scripts/app_store/client_test.rb
+      scripts/app_store/metadata_pretransport_recovery.rb
+      scripts/app_store/metadata_pretransport_recovery_test.rb
       scripts/app_store/release_pipeline_contract_test.rb
+      scripts/release_contract.rb
+      scripts/release_contract_test.rb
     ], changes.map { |change| change.fetch("path") }
     assert changes.all? { |change|
-      change.keys.sort == %w[after_sha256 before_sha256 class path] &&
+        change.keys.sort == %w[after_sha256 before_sha256 class path] &&
         change.fetch("class") == "release_tooling" &&
-        change.fetch("before_sha256").match?(/\A[0-9a-f]{64}\z/) &&
+        (change["before_sha256"].nil? ||
+          change.fetch("before_sha256").match?(/\A[0-9a-f]{64}\z/)) &&
         change.fetch("after_sha256").match?(/\A[0-9a-f]{64}\z/)
     }
+
+    recovery = JSON.parse(
+      File.binread(File.join(ROOT, "fastlane", "metadata_pretransport_recovery.json"))
+    )
+    NovaStationPinballMetadataPretransportRecovery.validate_contract!(recovery)
+    assert_equal contract.fetch("release_run_id"),
+                 recovery.fetch("release_run_id")
+    assert_equal contract.fetch("baseline_head"),
+                 recovery.fetch("historical_head")
+    assert_equal "ead006d2f2f3d776e65b8bc7cc43be82b062da2635f031b2b08a4c8ea7f65fc6",
+                 recovery.fetch("historical_candidate_id")
+    assert_equal contract.fetch("baseline_contract_sha256"),
+                 recovery.fetch("historical_adoption_contract_sha256")
+    assert_equal %w[
+      fastlane/Fastfile
+      fastlane/metadata_preflight.rb
+      fastlane/metadata_preflight_test.rb
+      fastlane/release_support.rb
+      fastlane/release_support_test.rb
+      scripts/app_store/adopt_media.rb
+      scripts/app_store/adopt_media_test.rb
+      scripts/app_store/client.rb
+      scripts/app_store/client_test.rb
+      scripts/app_store/metadata_pretransport_recovery.rb
+      scripts/app_store/metadata_pretransport_recovery_test.rb
+      scripts/app_store/release_pipeline_contract_test.rb
+      scripts/release_contract.rb
+      scripts/release_contract_test.rb
+    ], recovery.fetch("source_changes").map { |change| change.fetch("path") }
   end
 
   def test_media_snapshot_and_expectation_cover_the_real_nova_matrix
@@ -142,6 +184,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
       setup_asc release_contract asc_status metadata screenshots app_previews
       adopt_media media_contract upload_screenshots upload_previews build_release upload_release
       submit_review release_quick pricing iap_status iap_sync
+      recover_metadata_pretransport
     ]
     required_lanes.each { |name| assert_match(/^\s*lane :#{name}\b/, source) }
 
@@ -154,6 +197,13 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
 
     metadata = lane_body(source, "metadata")
     assert_guarded_transport(metadata, kind: "metadata")
+    assert_includes metadata, "nova_metadata_paths!"
+    assert_includes metadata, "nova_metadata_preflight!"
+    assert_includes metadata, "metadata_paths.fetch(:metadata_path)"
+    assert_includes metadata, "metadata_paths.fetch(:app_rating_config_path)"
+    refute_includes metadata, 'File.join(__dir__, "metadata")'
+    recovery = lane_body(source, "recover_metadata_pretransport")
+    assert_includes recovery, '"metadata_pretransport_recovery"'
     screenshots = lane_body(source, "upload_screenshots")
     assert_includes screenshots, "media_contract"
     assert_guarded_transport(screenshots, kind: "screenshots")
@@ -185,6 +235,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     helpers = %w[
       client.rb metadata_readback.rb status.rb wait_for_state.rb select_build.rb
       review_submission.rb setup_asc.rb pricing.rb iap_status.rb iap_sync.rb
+      metadata_pretransport_recovery.rb
     ]
     helpers.each do |name|
       path = File.join(ROOT, "scripts", "app_store", name)
@@ -225,7 +276,8 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
   end
 
   def assert_guarded_transport(body, kind:)
-    assert_includes body, "nova_transport_once(upload_proof)"
+    assert_includes body, "nova_transport_once("
+    assert_includes body, "upload_proof"
     assert_includes body, %Q{nova_mutation_proof("#{kind}"}
     assert_equal 1, body.scan("upload_to_app_store(").length
     assert_includes body, "nova_wait_for_state!"
