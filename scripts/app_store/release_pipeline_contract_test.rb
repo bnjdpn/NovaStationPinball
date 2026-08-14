@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "bigdecimal"
 require "digest"
 require "json"
 require "minitest/autorun"
@@ -13,11 +14,6 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
   LOCALES = %w[en-US fr-FR].freeze
   DEVICES = %w[iphone-17-pro-max iphone-se-3 ipad-pro-13-m5].freeze
   SCENARIOS = %w[launch mission promotion multiball tilt game-over].freeze
-  IAP = %w[
-    com.bnjdpn.NovaStationPinball.tip.cafe
-    com.bnjdpn.NovaStationPinball.tip.merci
-    com.bnjdpn.NovaStationPinball.tip.soutien
-  ].freeze
 
   def test_checkpoint_pipeline_configuration_is_exact_and_app_local
     config = JSON.parse(File.binread(CONFIG_PATH))
@@ -27,16 +23,12 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_equal "767SX34A7Z", config.fetch("team_id")
     assert_equal "Builds/AppStore/NovaStationPinball", config.fetch("artifact_root")
     assert_equal "/private/tmp/apps-factory/NovaStationPinball", config.fetch("scratch_root")
-    assert_equal IAP, config.fetch("iap")
-    assert_equal(
-      {
-        "price" => "0.00",
-        "territory" => "FRA",
-        "currency" => "EUR",
-        "readback_contract" => "free-v1"
-      },
-      config.fetch("pricing")
-    )
+    configured_products = config.fetch("tip_products")
+    assert_equal configured_products.map { |product| product.fetch("product_id") }, config.fetch("iap")
+    assert_operator BigDecimal(config.fetch("pricing").fetch("price")), :>=, BigDecimal("0")
+    assert_equal "FRA", config.fetch("pricing").fetch("territory")
+    assert_equal "EUR", config.fetch("pricing").fetch("currency")
+    refute_empty config.fetch("pricing").fetch("readback_contract")
 
     pipeline = config.fetch("release_pipeline")
     assert_equal 1, pipeline.fetch("schema_version")

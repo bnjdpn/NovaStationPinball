@@ -28,7 +28,7 @@ begin
   app = NovaStationPinballAscStatus.find_app(client, config.fetch("bundle_id"))
   payload = NovaStationPinballAscStatus.pricing(client, app.fetch("id"), config)
   puts JSON.pretty_generate(payload)
-  raise "ASC does not prove an exact free FRA/EUR schedule" unless payload["free"]
+  raise "ASC does not match the configured price schedule" unless payload["matches_configured_price"]
 rescue ArgumentError, KeyError, RuntimeError, NovaStationPinballAscError => error
   warn "pricing: #{error.message}"
   exit 1

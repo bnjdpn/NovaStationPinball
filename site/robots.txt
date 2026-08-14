@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://bnjdpn.github.io/NovaStationPinball/sitemap.xml

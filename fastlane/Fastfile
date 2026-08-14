@@ -438,6 +438,7 @@ platform :ios do
 
   desc "Validate the complete app-local release contract without ASC mutations"
   lane :release_contract do
+    sh(RbConfig.ruby, File.expand_path("../scripts/marketing_site.rb", __dir__), "--check")
     sh(RbConfig.ruby, File.join(nova_app_root, "scripts/release_contract.rb"), "--check")
     %w[
       fastlane/release_support_test.rb
@@ -463,7 +464,7 @@ platform :ios do
     end
   end
 
-  desc "Read version, metadata, COMPLETE media, exact build, free price, tips and submission"
+  desc "Read version, metadata, COMPLETE media, exact build, configured price, products and submission"
   lane :asc_status do
     nova_run_asc_tool(
       "status", "--bundle-id", NOVA_BUNDLE_ID,
@@ -710,7 +711,7 @@ platform :ios do
     UI.user_error!("release_quick is disabled; the checkpointed command runs media_contract. Use bin/apple-release release NovaStationPinball")
   end
 
-  desc "Read and enforce the exact free FRA/EUR price without implicit mutation"
+  desc "Read and enforce the price declared by the release configuration without implicit mutation"
   lane :pricing do
     nova_run_asc_tool("pricing", "--bundle-id", NOVA_BUNDLE_ID)
   end

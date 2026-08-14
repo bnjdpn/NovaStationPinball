@@ -309,7 +309,7 @@ module NovaStationPinballAscStatus
     current = active.find { |price| price["relationship"] == "manualPrices" } ||
       active.first
     current_price = current && current["customer_price"]
-    free = current_price &&
+    matches_configured_price = current_price &&
       BigDecimal(current_price.to_s) == BigDecimal(expected.fetch("price")) &&
       base.fetch("id").to_s == territory.to_s &&
       base.dig("attributes", "currency").to_s == expected.fetch("currency")
@@ -320,7 +320,7 @@ module NovaStationPinballAscStatus
       "territory" => territory,
       "current_price" => current_price,
       "target_price" => expected.fetch("price"),
-      "free" => free == true,
+      "matches_configured_price" => matches_configured_price == true,
       "active_prices" => active
     }
   end
@@ -432,7 +432,7 @@ module NovaStationPinballAscStatus
     puts selected ? "Selected build: #{selected['build']} state=#{selected['state']}" : "Selected build: none"
     assets = payload.fetch("assets")
     puts "Media: screenshots=#{assets['screenshot_count']} complete=#{assets['screenshots_complete']} previews=#{assets['preview_count']} complete=#{assets['previews_complete']}"
-    puts "Pricing: #{payload.dig('pricing', 'current_price')} #{payload.dig('pricing', 'base_currency')} free=#{payload.dig('pricing', 'free')}"
+    puts "Pricing: #{payload.dig('pricing', 'current_price')} #{payload.dig('pricing', 'base_currency')} matches_configured=#{payload.dig('pricing', 'matches_configured_price')}"
     puts "IAP: expected=#{payload.dig('iap', 'expected_count')} actual=#{payload.dig('iap', 'actual_count')}"
     puts "Metadata complete: #{payload.dig('metadata', 'complete')}"
   end

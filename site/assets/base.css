@@ -1,0 +1,43 @@
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif); background: var(--page); color: var(--ink); line-height: 1.55; text-rendering: optimizeLegibility; }
+img { display: block; max-width: 100%; }
+a { color: inherit; text-decoration-thickness: .08em; text-underline-offset: .2em; }
+button, input, textarea, select { font: inherit; }
+button, a, select, input, textarea { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--focus, #0866ff); outline-offset: 4px; }
+.skip-link { position: fixed; z-index: 100; inset: 12px auto auto 12px; padding: 10px 14px; background: #fff; color: #111; transform: translateY(-160%); }
+.skip-link:focus { transform: none; }
+.brand { display: inline-flex; align-items: center; gap: .75rem; width: fit-content; font-weight: 750; text-decoration: none; }
+.brand img { width: 42px; height: 42px; border-radius: 11px; }
+.language-picker { display: inline-flex; align-items: center; gap: .6rem; font-size: .78rem; }
+.language-picker select { max-width: 175px; padding: .55rem 1.8rem .55rem .65rem; border: 1px solid currentColor; border-radius: 0; background: transparent; color: inherit; }
+.language-picker option { color: #111; background: #fff; }
+.app-store-action { display: inline-flex; padding: 10px; line-height: 0; }
+.app-store-action img { width: auto; height: 40px; }
+.app-store-action:focus-visible { outline-offset: 1px; }
+.support-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem 1.4rem; }
+.support-form label { display: grid; gap: .45rem; font-size: .78rem; font-weight: 700; }
+.support-form input, .support-form select, .support-form textarea { width: 100%; padding: .8rem .15rem; border: 0; border-bottom: 1px solid currentColor; border-radius: 0; background: transparent; color: inherit; }
+.support-form textarea { min-height: 9rem; resize: vertical; }
+.support-form .message-field, .support-form button, .form-status { grid-column: 1 / -1; }
+.support-form button { width: fit-content; padding: .8rem 1.15rem; border: 1px solid currentColor; border-radius: 0; background: transparent; color: inherit; font-weight: 800; cursor: pointer; }
+.support-form button:disabled { opacity: .55; cursor: wait; }
+.form-status { min-height: 1.5em; margin: 0; }
+.honeypot { position: absolute !important; left: -10000px !important; width: 1px !important; height: 1px !important; overflow: hidden !important; }
+.trademark-notice { display: block; max-width: 70rem; font-size: .67rem; line-height: 1.5; opacity: .72; }
+.not-found { width: min(100% - 2rem, 48rem); min-height: 100svh; margin-inline: auto; display: grid; align-content: center; gap: 1rem; }
+.not-found p { max-width: 42rem; margin: 0; }
+.not-found .error-code { font: 700 .72rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
+.not-found h1 { max-width: 14ch; margin: 0; font-size: clamp(3rem, 9vw, 7rem); line-height: .9; }
+.not-found a { width: fit-content; margin-top: 1rem; font-weight: 800; }
+@media (max-width: 620px) {
+  .brand span { display: none; }
+  .language-picker > span { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; border: 0; white-space: nowrap; }
+  .support-form { grid-template-columns: 1fr; }
+  .support-form .message-field, .support-form button, .form-status { grid-column: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

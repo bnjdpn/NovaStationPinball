@@ -10,9 +10,12 @@ flipper rétrofuturiste, précise et jouable hors ligne. Elle met en avant les
 déterministe, missions, neuf promotions, multibille, records locaux, Game
 Center facultatif et présentation 4:3 sans recadrage sur iPhone et iPad.
 
-L’angle différenciant repose sur une expérience gratuite sans publicité, suivi,
-compte ni paywall. Les trois pourboires restent facultatifs et ne débloquent
-aucune fonctionnalité.
+Pour la version 1.0 actuellement décrite par la fiche, l’angle différenciant
+repose sur une expérience disponible gratuitement au téléchargement, sans
+publicité, suivi, compte ni paywall. Les trois pourboires configurés pour cette
+version sont facultatifs et ne débloquent aucune fonctionnalité. Les évolutions
+du modèle commercial relèvent d’un plan app-spécifique approuvé, avec confiance,
+confidentialité, conformité Apple et migration loyale.
 
 ## Recherche concurrentielle
 

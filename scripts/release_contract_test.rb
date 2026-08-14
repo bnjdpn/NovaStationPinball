@@ -6,6 +6,7 @@ require "minitest/autorun"
 require "open3"
 require "pathname"
 require "yaml"
+require_relative "pages_workflow_contract"
 
 class ReleaseContractTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
@@ -14,7 +15,6 @@ class ReleaseContractTest < Minitest::Test
     upload_previews build_release upload_release submit_review release_quick pricing
     iap_status iap_sync
   ].freeze
-  EXPECTED_TIPS = %w[tip.cafe tip.merci tip.soutien].freeze
 
   def test_repository_contract_is_complete
     required_files.each do |path|
@@ -65,7 +65,10 @@ class ReleaseContractTest < Minitest::Test
 
     release_config = JSON.parse(File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8"))
     assert_equal %w[en-US fr-FR], release_config.fetch("locales").sort
-    assert_equal EXPECTED_TIPS, release_config.fetch("tip_products").map { |tip| tip.fetch("id") }.sort
+    configured_products = release_config.fetch("tip_products")
+    assert_equal configured_products.map { |product| product.fetch("product_id") }.sort,
+                 release_config.fetch("iap").sort
+    assert configured_products.all? { |product| product.fetch("type").match?(/\A[A-Z][A-Z0-9_]*\z/) }
     assert_equal "https://bnjdpn.github.io/NovaStationPinball/#contact", release_config.fetch("support_url")
 
     fastfile = File.read(File.join(ROOT, "fastlane/Fastfile"), encoding: "UTF-8")
@@ -78,7 +81,8 @@ class ReleaseContractTest < Minitest::Test
       refute_match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i, contents, "public email address in #{path}")
     end
     assert_includes File.read(File.join(ROOT, "docs/index.html"), encoding: "UTF-8"), "formspree.io"
-    refute File.exist?(File.join(ROOT, ".github", "workflows")), "GitHub workflows are forbidden"
+    pages_errors = PagesWorkflowContract.errors(ROOT, source_dir: "site", required: true)
+    assert_empty pages_errors, pages_errors.join("\n")
 
     stdout, stderr, status = Open3.capture3("ruby", File.join(ROOT, "scripts/release_contract.rb"))
     assert status.success?, "release contract failed:\n#{stdout}\n#{stderr}"
@@ -99,16 +103,33 @@ class ReleaseContractTest < Minitest::Test
     assert_includes stdout, "release_contract: OK"
   end
 
-  def test_optional_tip_configuration_is_exact_and_development_only
+  def test_configured_monetization_is_mirrored_by_the_development_storekit_file
+    release_config = JSON.parse(
+      File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8")
+    )
+    configured_products = release_config.fetch("tip_products")
     storekit = JSON.parse(
       File.read(File.join(ROOT, "NovaStationPinball/StoreKit/NovaStationPinball.storekit"), encoding: "UTF-8")
     )
     products = storekit.fetch("products")
 
-    assert_equal EXPECTED_TIPS.map { |tip| "com.bnjdpn.NovaStationPinball.#{tip}" }.sort,
+    assert_equal configured_products.map { |product| product.fetch("product_id") }.sort,
                  products.map { |product| product.fetch("productID") }.sort
-    assert products.all? { |product| product.fetch("type") == "Consumable" }
-    assert products.flat_map { |product| product.fetch("localizations") }
+    type_map = {
+      "CONSUMABLE" => "Consumable",
+      "NON_CONSUMABLE" => "NonConsumable",
+      "NON_RENEWING_SUBSCRIPTION" => "NonRenewingSubscription",
+      "AUTO_RENEWABLE_SUBSCRIPTION" => "AutoRenewableSubscription"
+    }
+    configured_types = configured_products.to_h do |product|
+      [product.fetch("product_id"), type_map.fetch(product.fetch("type"))]
+    end
+    assert products.all? { |product| product.fetch("type") == configured_types.fetch(product.fetch("productID")) }
+    configured_tip_ids = configured_products.each_with_object([]) do |product, ids|
+      ids << product.fetch("product_id") if product.fetch("id", "").start_with?("tip.")
+    end
+    assert products.select { |product| configured_tip_ids.include?(product.fetch("productID")) }
+                   .flat_map { |product| product.fetch("localizations") }
                    .all? { |localization| localization.fetch("description").match?(/(?:Unlocks no features|ne débloque aucune fonctionnalité)/i) }
 
     project = YAML.safe_load(File.read(File.join(ROOT, "project.yml"), encoding: "UTF-8"), aliases: false)
@@ -161,7 +182,8 @@ class ReleaseContractTest < Minitest::Test
       encoding: "UTF-8"
     )
     identifiers.each { |identifier| assert_includes layout_test, identifier }
-    %w[tip.cafe tip.merci tip.soutien].each do |tip_id|
+    JSON.parse(File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8"))
+        .fetch("tip_products").map { |product| product.fetch("id") }.each do |tip_id|
       assert_includes layout_test, %Q{"#{tip_id}"}
     end
     assert_includes layout_test, 'app.buttons["tipJarPurchase.\(identifier)"]'

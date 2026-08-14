@@ -1,0 +1,15 @@
+{
+  "name": "Nova Station Pinball",
+  "short_name": "Nova Station Pinball",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#070B0E",
+  "theme_color": "#FFC64C",
+  "icons": [
+    {
+      "src": "assets/app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}

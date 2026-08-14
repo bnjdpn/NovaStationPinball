@@ -1,15 +1,16 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require "bigdecimal"
 require "json"
 require "pathname"
 require "yaml"
+require_relative "pages_workflow_contract"
 
 module NovaStationPinballReleaseContract
   ROOT = File.expand_path("..", __dir__)
   BUNDLE_ID = "com.bnjdpn.NovaStationPinball"
   REQUIRED_LOCALES = %w[en-US fr-FR].freeze
-  REQUIRED_TIPS = %w[tip.cafe tip.merci tip.soutien].freeze
   REQUIRED_LANES = %w[
     setup_asc release_contract asc_status metadata recover_metadata_pretransport screenshots app_previews adopt_media media_contract upload_screenshots
     upload_previews build_release upload_release submit_review release_quick pricing
@@ -134,8 +135,19 @@ module NovaStationPinballReleaseContract
     def validate_release_config
       config = JSON.parse(File.read(path("fastlane/release_config.json"), encoding: "UTF-8"))
       error("release locales must be French and English") unless config["locales"].sort == REQUIRED_LOCALES
-      tips = config.fetch("tip_products").map { |tip| tip.fetch("id") }.sort
-      error("only the three optional tips are allowed") unless tips == REQUIRED_TIPS
+      pricing = config.fetch("pricing")
+      error("configured price must be non-negative") if BigDecimal(pricing.fetch("price").to_s).negative?
+      error("pricing territory must be configured") if pricing.fetch("territory", "").strip.empty?
+      error("pricing currency must be configured") if pricing.fetch("currency", "").strip.empty?
+      products = config.fetch("tip_products")
+      error("configured monetization products must be an array") unless products.is_a?(Array)
+      product_ids = products.map { |product| product.fetch("product_id") }
+      error("configured monetization product ids must be unique") unless product_ids.uniq.length == product_ids.length
+      products.each do |product|
+        error("configured monetization product id is missing") if product.fetch("product_id", "").strip.empty?
+        error("configured monetization product type is invalid") unless product.fetch("type", "").match?(/\A[A-Z][A-Z0-9_]*\z/)
+      end
+      error("iap list must mirror configured monetization products") unless config.fetch("iap").sort == product_ids.sort
       error("support URL mismatch") unless config["support_url"] == "https://bnjdpn.github.io/NovaStationPinball/#contact"
       expected_scenarios = %w[launch mission promotion multiball tilt game-over]
       expected_preview_policy = {
@@ -405,10 +417,27 @@ module NovaStationPinballReleaseContract
     def validate_optional_services
       storekit = JSON.parse(File.read(path("NovaStationPinball/StoreKit/NovaStationPinball.storekit"), encoding: "UTF-8"))
       products = storekit.fetch("products")
-      expected_product_ids = REQUIRED_TIPS.map { |tip| "#{BUNDLE_ID}.#{tip}" }.sort
-      error("StoreKit configuration must contain exactly the three tips") unless products.map { |product| product.fetch("productID") }.sort == expected_product_ids
-      error("all tip products must be consumable") unless products.all? { |product| product["type"] == "Consumable" }
-      error("tip products must unlock no features") unless products.all? do |product|
+      release_config = JSON.parse(File.read(path("fastlane/release_config.json"), encoding: "UTF-8"))
+      configured_products = release_config.fetch("tip_products")
+      expected_product_ids = configured_products.map { |product| product.fetch("product_id") }.sort
+      error("StoreKit configuration must mirror configured monetization products") unless products.map { |product| product.fetch("productID") }.sort == expected_product_ids
+      type_map = {
+        "CONSUMABLE" => "Consumable",
+        "NON_CONSUMABLE" => "NonConsumable",
+        "NON_RENEWING_SUBSCRIPTION" => "NonRenewingSubscription",
+        "AUTO_RENEWABLE_SUBSCRIPTION" => "AutoRenewableSubscription"
+      }
+      configured_types = configured_products.to_h do |product|
+        asc_type = product.fetch("type")
+        [product.fetch("product_id"), type_map.fetch(asc_type) { asc_type.split("_").map(&:capitalize).join }]
+      end
+      error("StoreKit product types must mirror the release configuration") unless products.all? do |product|
+        product.fetch("type") == configured_types.fetch(product.fetch("productID"))
+      end
+      configured_tip_ids = configured_products.each_with_object([]) do |product, ids|
+        ids << product.fetch("product_id") if product.fetch("id", "").start_with?("tip.")
+      end
+      error("configured tip products must unlock no features") unless products.select { |product| configured_tip_ids.include?(product.fetch("productID")) }.all? do |product|
         product.fetch("localizations").all? do |localization|
           localization.fetch("description").match?(/(?:Unlocks no features|ne débloque aucune fonctionnalité)/i)
         end
@@ -559,7 +588,9 @@ module NovaStationPinballReleaseContract
     end
 
     def validate_ci
-      error("GitHub workflows are forbidden") if Dir.exist?(path(".github/workflows"))
+      PagesWorkflowContract.errors(@root, source_dir: "site").each do |message|
+        error("Pages workflow contract: #{message}")
+      end
     end
 
     def error(message)

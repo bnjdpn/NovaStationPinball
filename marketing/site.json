@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "app_name": "Nova Station Pinball",
+  "slug": "NovaStationPinball",
+  "base_url": "https://bnjdpn.github.io/NovaStationPinball/",
+  "metadata_root": "fastlane/metadata",
+  "docs_dir": "site",
+  "design_contract": {
+    "template_id": "nova-machine-room-v1",
+    "hero_raster": "assets/hero-editorial.jpg",
+    "hero_alt": {
+      "en": "A worn space-station pinball machine in a dark recreation bay.",
+      "fr": "Un flipper de station spatiale patiné dans une salle de jeu sombre."
+    },
+    "forbid_css_illustration": true
+  },
+  "editorial": {
+    "nav_label": { "en": "Operator notes", "fr": "Notes d’opérateur" },
+    "section_kicker": { "en": "Table service log", "fr": "Journal de maintenance" },
+    "section_heading": {
+      "en": "Read the lanes. Keep the station online.",
+      "fr": "Lisez les couloirs. Gardez la station en ligne."
+    },
+    "details_label": { "en": "Read the full operator brief", "fr": "Lire le briefing complet" },
+    "proof_caption": {
+      "en": "Real in-game capture from the current candidate.",
+      "fr": "Capture réelle du candidat actuel en jeu."
+    },
+    "features": {
+      "en": [
+        { "title": "Two-thumb controls", "body": "Use responsive flippers, a pull-and-release plunger and a short nudge gesture with tilt protection." },
+        { "title": "A mission ladder", "body": "Climb ramps, open the portal, complete timed missions, earn nine clearance promotions and trigger multiball." },
+        { "title": "One complete table", "body": "The full 4:3 playfield and status console stay visible in landscape on iPhone and iPad." }
+      ],
+      "fr": [
+        { "title": "Commandes à deux pouces", "body": "Utilisez des batteurs réactifs, un lanceur à tirer puis relâcher et un geste court pour secouer, avec protection contre le tilt." },
+        { "title": "Une progression par missions", "body": "Gravissez les rampes, ouvrez le portail, terminez les missions chronométrées, obtenez neuf habilitations et déclenchez le multibille." },
+        { "title": "Une table complète", "body": "Le plateau 4:3 et sa console d’état restent visibles en paysage sur iPhone comme sur iPad." }
+      ]
+    }
+  },
+  "icon_path": "NovaStationPinball/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png",
+  "primary_locale": "en-US",
+  "locales": [
+    {
+      "code": "en-US",
+      "source": "en-US"
+    },
+    {
+      "code": "fr-FR",
+      "source": "fr-FR"
+    }
+  ],
+  "redirect_locales": [],
+  "art_direction": "orbital-pinball-service-manual",
+  "theme_color": "#FFC64C",
+  "background_color": "#070B0E",
+  "application_category": "GameApplication",
+  "operating_system": "iOS",
+  "public_version": "1.0",
+  "app_store_url": null,
+  "app_store_badges": {},
+  "privacy_path": "privacy.html",
+  "eyebrow": {
+    "en": "One complete table, built for missions and score",
+    "fr": "Une table complète, conçue pour les missions et le score"
+  },
+  "truth_points": {
+    "en": [
+      "17 missions",
+      "Offline play with optional Game Center",
+      "No ads or tracking"
+    ],
+    "fr": [
+      "17 missions",
+      "Jeu hors ligne et Game Center facultatif",
+      "Sans pub ni tracking"
+    ]
+  },
+  "related_heading": {
+    "en": "Another independent offline arcade game.",
+    "fr": "Un autre jeu d’arcade indépendant et hors ligne."
+  },
+  "related_apps": [
+    {
+      "name": "Vesper Drift",
+      "site_url": "https://bnjdpn.github.io/VesperDrift/",
+      "icon_path": "assets/apps/vesper.png",
+      "tagline": {
+        "en": "One-thumb vertical arcade action, offline.",
+        "fr": "Un shoot’em up vertical à un pouce, hors ligne."
+      }
+    }
+  ],
+  "screenshots": {
+    "en-US": [
+      {
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-01-launch-iphone-17-pro-max.png"
+      },
+      {
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-02-mission-iphone-17-pro-max.png"
+      },
+      {
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png"
+      }
+    ],
+    "fr-FR": [
+      {
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png"
+      },
+      {
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png"
+      },
+      {
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png"
+      }
+    ]
+  },
+  "local_assets": [
+    {
+      "source": "marketing/art/hero-editorial.jpg",
+      "path": "assets/hero-editorial.jpg"
+    },
+    {
+      "source": "marketing/404.html",
+      "path": "404.html"
+    },
+    {
+      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/en-US/01-launch-iphone-17-pro-max.png",
+      "path": "assets/screenshots/en-US-01-launch-iphone-17-pro-max.png"
+    },
+    {
+      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/en-US/02-mission-iphone-17-pro-max.png",
+      "path": "assets/screenshots/en-US-02-mission-iphone-17-pro-max.png"
+    },
+    {
+      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/en-US/04-multiball-iphone-17-pro-max.png",
+      "path": "assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png"
+    },
+    {
+      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/fr-FR/01-launch-iphone-17-pro-max.png",
+      "path": "assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png"
+    },
+    {
+      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/fr-FR/02-mission-iphone-17-pro-max.png",
+      "path": "assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png"
+    },
+    {
+      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/fr-FR/04-multiball-iphone-17-pro-max.png",
+      "path": "assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png"
+    },
+    {
+      "source": "docs/privacy.html",
+      "path": "privacy.html"
+    },
+    {
+      "source": "marketing/related/vesper.png",
+      "path": "assets/apps/vesper.png"
+    }
+  ],
+  "content_overrides": {}
+}
