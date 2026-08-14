@@ -126,27 +126,27 @@
       "path": "404.html"
     },
     {
-      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/en-US/01-launch-iphone-17-pro-max.png",
+      "source": "site/assets/screenshots/en-US-01-launch-iphone-17-pro-max.png",
       "path": "assets/screenshots/en-US-01-launch-iphone-17-pro-max.png"
     },
     {
-      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/en-US/02-mission-iphone-17-pro-max.png",
+      "source": "site/assets/screenshots/en-US-02-mission-iphone-17-pro-max.png",
       "path": "assets/screenshots/en-US-02-mission-iphone-17-pro-max.png"
     },
     {
-      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/en-US/04-multiball-iphone-17-pro-max.png",
+      "source": "site/assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png",
       "path": "assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png"
     },
     {
-      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/fr-FR/01-launch-iphone-17-pro-max.png",
+      "source": "site/assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png",
       "path": "assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png"
     },
     {
-      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/fr-FR/02-mission-iphone-17-pro-max.png",
+      "source": "site/assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png",
       "path": "assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png"
     },
     {
-      "source": "Builds/AppStore/NovaStationPinball/20260810-nova-100-official-3890f8ce-019fe558/screenshots/fr-FR/04-multiball-iphone-17-pro-max.png",
+      "source": "site/assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png",
       "path": "assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png"
     },
     {
