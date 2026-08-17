@@ -6,6 +6,7 @@ on:
     paths:
       - "marketing/**"
       - "scripts/marketing_site.rb"
+      - "scripts/marketing_seo.rb"
       - "fastlane/metadata/**"
       - "NovaStationPinball/Resources/Assets.xcassets/AppIcon.appiconset/**"
       - "site/**"
@@ -27,15 +28,16 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b
+        with:
+          ruby-version: "4.0.6"
       - name: Validate generated site
         run: ruby scripts/marketing_site.rb --check
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
-      - name: Stage public files only
-        run: |
-          mkdir -p _site
-          rsync -a --delete --exclude DIRECTION.md site/ _site/
-          test ! -e _site/DIRECTION.md
+      - name: Stage exact Pages artifact
+        run: ruby scripts/marketing_site.rb --check --stage _site
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:

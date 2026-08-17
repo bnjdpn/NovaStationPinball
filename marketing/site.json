@@ -12,30 +12,59 @@
       "en": "A worn space-station pinball machine in a dark recreation bay.",
       "fr": "Un flipper de station spatiale patiné dans une salle de jeu sombre."
     },
-    "forbid_css_illustration": true
+    "forbid_css_illustration": true,
+    "hero_width": 1536,
+    "hero_height": 1024
   },
   "editorial": {
-    "nav_label": { "en": "Operator notes", "fr": "Notes d’opérateur" },
-    "section_kicker": { "en": "Table service log", "fr": "Journal de maintenance" },
+    "nav_label": {
+      "en": "Operator notes",
+      "fr": "Notes d’opérateur"
+    },
+    "section_kicker": {
+      "en": "Table service log",
+      "fr": "Journal de maintenance"
+    },
     "section_heading": {
       "en": "Read the lanes. Keep the station online.",
       "fr": "Lisez les couloirs. Gardez la station en ligne."
     },
-    "details_label": { "en": "Read the full operator brief", "fr": "Lire le briefing complet" },
+    "details_label": {
+      "en": "Read the full operator brief",
+      "fr": "Lire le briefing complet"
+    },
     "proof_caption": {
       "en": "Real in-game capture from the current candidate.",
       "fr": "Capture réelle du candidat actuel en jeu."
     },
     "features": {
       "en": [
-        { "title": "Two-thumb controls", "body": "Use responsive flippers, a pull-and-release plunger and a short nudge gesture with tilt protection." },
-        { "title": "A mission ladder", "body": "Climb ramps, open the portal, complete timed missions, earn nine clearance promotions and trigger multiball." },
-        { "title": "One complete table", "body": "The full 4:3 playfield and status console stay visible in landscape on iPhone and iPad." }
+        {
+          "title": "Two-thumb controls",
+          "body": "Use responsive flippers, a pull-and-release plunger and a short nudge gesture with tilt protection."
+        },
+        {
+          "title": "A mission ladder",
+          "body": "Climb ramps, open the portal, complete timed missions, earn nine clearance promotions and trigger multiball."
+        },
+        {
+          "title": "One complete table",
+          "body": "The full 4:3 playfield and status console stay visible in landscape on iPhone and iPad."
+        }
       ],
       "fr": [
-        { "title": "Commandes à deux pouces", "body": "Utilisez des batteurs réactifs, un lanceur à tirer puis relâcher et un geste court pour secouer, avec protection contre le tilt." },
-        { "title": "Une progression par missions", "body": "Gravissez les rampes, ouvrez le portail, terminez les missions chronométrées, obtenez neuf habilitations et déclenchez le multibille." },
-        { "title": "Une table complète", "body": "Le plateau 4:3 et sa console d’état restent visibles en paysage sur iPhone comme sur iPad." }
+        {
+          "title": "Commandes à deux pouces",
+          "body": "Utilisez des batteurs réactifs, un lanceur à tirer puis relâcher et un geste court pour secouer, avec protection contre le tilt."
+        },
+        {
+          "title": "Une progression par missions",
+          "body": "Gravissez les rampes, ouvrez le portail, terminez les missions chronométrées, obtenez neuf habilitations et déclenchez le multibille."
+        },
+        {
+          "title": "Une table complète",
+          "body": "Le plateau 4:3 et sa console d’état restent visibles en paysage sur iPhone comme sur iPad."
+        }
       ]
     }
   },
@@ -95,24 +124,36 @@
   "screenshots": {
     "en-US": [
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-01-launch-iphone-17-pro-max.png"
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-01-launch-iphone-17-pro-max.png",
+        "width": 2868,
+        "height": 1320
       },
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-02-mission-iphone-17-pro-max.png"
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-02-mission-iphone-17-pro-max.png",
+        "width": 2868,
+        "height": 1320
       },
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png"
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png",
+        "width": 2868,
+        "height": 1320
       }
     ],
     "fr-FR": [
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png"
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png",
+        "width": 2868,
+        "height": 1320
       },
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png"
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png",
+        "width": 2868,
+        "height": 1320
       },
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png"
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png",
+        "width": 2868,
+        "height": 1320
       }
     ]
   },
@@ -154,9 +195,30 @@
       "path": "privacy.html"
     },
     {
-      "source": "marketing/related/vesper.png",
+      "source": "marketing/web/related/vesper.png",
       "path": "assets/apps/vesper.png"
+    },
+    {
+      "source": "marketing/web/social-card.jpg",
+      "path": "assets/social-card.jpg"
     }
   ],
-  "content_overrides": {}
+  "content_overrides": {},
+  "developer_name": "Benjamin Dupin",
+  "developer_profile_url": "https://apps.apple.com/fr/developer/benjamin-dupin/id1871474236",
+  "portfolio_url": "https://bnjdpn.github.io/",
+  "seo_last_modified": "2026-08-17",
+  "hreflang_defaults": {
+    "en": "en-US",
+    "fr": "fr-FR"
+  },
+  "web_icon_path": "marketing/web/app-icon-192.png",
+  "web_icon_size": 192,
+  "web_icon_large_path": "marketing/web/app-icon-512.png",
+  "web_icon_large_size": 512,
+  "social_image_path": "assets/social-card.jpg",
+  "social_image_source": "marketing/web/social-card.jpg",
+  "social_image_type": "image/jpeg",
+  "social_image_width": 1200,
+  "social_image_height": 630
 }

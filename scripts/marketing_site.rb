@@ -729,16 +729,22 @@ module PortfolioMarketingSite
   end
 end
 
+require_relative "marketing_seo"
+PortfolioMarketingSeo.install!
+
 if $PROGRAM_NAME == __FILE__
-  options = { check: false }
+  options = { check: false, stage: nil }
   OptionParser.new do |parser|
     parser.banner = "Usage: ruby scripts/marketing_site.rb [--check] [--config PATH]"
     parser.on("--check", "Fail when committed output is stale") { options[:check] = true }
+    parser.on("--stage DIR", "Stage the exact Pages artifact; target must be _site") { |value| options[:stage] = value }
     parser.on("--config PATH", "Config path relative to repo root") { |value| options[:config] = value }
   end.parse!
 
   repo_root = Pathname.new(__dir__).join("..").expand_path
   config_path = repo_root.join(options[:config] || "marketing/site.json")
-  success = PortfolioMarketingSite::Generator.new(repo_root: repo_root, config_path: config_path).run(check: options.fetch(:check))
+  generator = PortfolioMarketingSite::Generator.new(repo_root: repo_root, config_path: config_path)
+  success = generator.run(check: options.fetch(:check))
+  generator.stage!(options[:stage]) if success && options[:stage]
   exit(success ? 0 : 1)
 end

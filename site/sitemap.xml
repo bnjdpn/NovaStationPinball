@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://bnjdpn.github.io/NovaStationPinball/</loc></url>
-  <url><loc>https://bnjdpn.github.io/NovaStationPinball/en-US/</loc></url>
-  <url><loc>https://bnjdpn.github.io/NovaStationPinball/fr-FR/</loc></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://bnjdpn.github.io/NovaStationPinball/</loc>
+    <lastmod>2026-08-17</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-US" href="https://bnjdpn.github.io/NovaStationPinball/" />
+    <xhtml:link rel="alternate" hreflang="fr-FR" href="https://bnjdpn.github.io/NovaStationPinball/fr-FR/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://bnjdpn.github.io/NovaStationPinball/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://bnjdpn.github.io/NovaStationPinball/fr-FR/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://bnjdpn.github.io/NovaStationPinball/" />
+  </url>
+  <url>
+    <loc>https://bnjdpn.github.io/NovaStationPinball/fr-FR/</loc>
+    <lastmod>2026-08-17</lastmod>
+    <xhtml:link rel="alternate" hreflang="en-US" href="https://bnjdpn.github.io/NovaStationPinball/" />
+    <xhtml:link rel="alternate" hreflang="fr-FR" href="https://bnjdpn.github.io/NovaStationPinball/fr-FR/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://bnjdpn.github.io/NovaStationPinball/" />
+    <xhtml:link rel="alternate" hreflang="fr" href="https://bnjdpn.github.io/NovaStationPinball/fr-FR/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://bnjdpn.github.io/NovaStationPinball/" />
+  </url>
 </urlset>
