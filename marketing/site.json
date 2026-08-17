@@ -7,14 +7,15 @@
   "docs_dir": "site",
   "design_contract": {
     "template_id": "nova-machine-room-v1",
-    "hero_raster": "assets/hero-editorial.jpg",
-    "hero_alt": {
-      "en": "A worn space-station pinball machine in a dark recreation bay.",
-      "fr": "Un flipper de station spatiale patiné dans une salle de jeu sombre."
-    },
+    "hero_raster": "assets/shots/en-US/01-2868.webp",
     "forbid_css_illustration": true,
-    "hero_width": 1536,
-    "hero_height": 1024
+    "hero_width": 2868,
+    "hero_height": 1320,
+    "hero_source": "app-store-screenshot",
+    "hero_alt": {
+      "en": "Nova Station Pinball table in play, real in-game capture.",
+      "fr": "Table de Nova Station Pinball en jeu, capture réelle."
+    }
   },
   "editorial": {
     "nav_label": {
@@ -124,34 +125,124 @@
   "screenshots": {
     "en-US": [
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-01-launch-iphone-17-pro-max.png",
+        "base": "assets/shots/en-US/01",
+        "variants": [
+          {
+            "w": 860,
+            "h": 396
+          },
+          {
+            "w": 1720,
+            "h": 791
+          },
+          {
+            "w": 2868,
+            "h": 1320
+          }
+        ],
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/shots/en-US/01-2868.webp",
         "width": 2868,
         "height": 1320
       },
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-02-mission-iphone-17-pro-max.png",
+        "base": "assets/shots/en-US/02",
+        "variants": [
+          {
+            "w": 860,
+            "h": 396
+          },
+          {
+            "w": 1720,
+            "h": 791
+          },
+          {
+            "w": 2868,
+            "h": 1320
+          }
+        ],
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/shots/en-US/02-2868.webp",
         "width": 2868,
         "height": 1320
       },
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png",
+        "base": "assets/shots/en-US/03",
+        "variants": [
+          {
+            "w": 860,
+            "h": 396
+          },
+          {
+            "w": 1720,
+            "h": 791
+          },
+          {
+            "w": 2868,
+            "h": 1320
+          }
+        ],
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/shots/en-US/03-2868.webp",
         "width": 2868,
         "height": 1320
       }
     ],
     "fr-FR": [
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png",
+        "base": "assets/shots/fr-FR/01",
+        "variants": [
+          {
+            "w": 860,
+            "h": 396
+          },
+          {
+            "w": 1720,
+            "h": 791
+          },
+          {
+            "w": 2868,
+            "h": 1320
+          }
+        ],
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/shots/fr-FR/01-2868.webp",
         "width": 2868,
         "height": 1320
       },
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png",
+        "base": "assets/shots/fr-FR/02",
+        "variants": [
+          {
+            "w": 860,
+            "h": 396
+          },
+          {
+            "w": 1720,
+            "h": 791
+          },
+          {
+            "w": 2868,
+            "h": 1320
+          }
+        ],
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/shots/fr-FR/02-2868.webp",
         "width": 2868,
         "height": 1320
       },
       {
-        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png",
+        "base": "assets/shots/fr-FR/03",
+        "variants": [
+          {
+            "w": 860,
+            "h": 396
+          },
+          {
+            "w": 1720,
+            "h": 791
+          },
+          {
+            "w": 2868,
+            "h": 1320
+          }
+        ],
+        "url": "https://bnjdpn.github.io/NovaStationPinball/assets/shots/fr-FR/03-2868.webp",
         "width": 2868,
         "height": 1320
       }
@@ -159,36 +250,156 @@
   },
   "local_assets": [
     {
-      "source": "marketing/art/hero-editorial.jpg",
-      "path": "assets/hero-editorial.jpg"
+      "source": "marketing/shots/en-US/01-1720.avif",
+      "path": "assets/shots/en-US/01-1720.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/01-1720.webp",
+      "path": "assets/shots/en-US/01-1720.webp"
+    },
+    {
+      "source": "marketing/shots/en-US/01-2868.avif",
+      "path": "assets/shots/en-US/01-2868.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/01-2868.webp",
+      "path": "assets/shots/en-US/01-2868.webp"
+    },
+    {
+      "source": "marketing/shots/en-US/01-860.avif",
+      "path": "assets/shots/en-US/01-860.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/01-860.webp",
+      "path": "assets/shots/en-US/01-860.webp"
+    },
+    {
+      "source": "marketing/shots/en-US/02-1720.avif",
+      "path": "assets/shots/en-US/02-1720.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/02-1720.webp",
+      "path": "assets/shots/en-US/02-1720.webp"
+    },
+    {
+      "source": "marketing/shots/en-US/02-2868.avif",
+      "path": "assets/shots/en-US/02-2868.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/02-2868.webp",
+      "path": "assets/shots/en-US/02-2868.webp"
+    },
+    {
+      "source": "marketing/shots/en-US/02-860.avif",
+      "path": "assets/shots/en-US/02-860.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/02-860.webp",
+      "path": "assets/shots/en-US/02-860.webp"
+    },
+    {
+      "source": "marketing/shots/en-US/03-1720.avif",
+      "path": "assets/shots/en-US/03-1720.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/03-1720.webp",
+      "path": "assets/shots/en-US/03-1720.webp"
+    },
+    {
+      "source": "marketing/shots/en-US/03-2868.avif",
+      "path": "assets/shots/en-US/03-2868.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/03-2868.webp",
+      "path": "assets/shots/en-US/03-2868.webp"
+    },
+    {
+      "source": "marketing/shots/en-US/03-860.avif",
+      "path": "assets/shots/en-US/03-860.avif"
+    },
+    {
+      "source": "marketing/shots/en-US/03-860.webp",
+      "path": "assets/shots/en-US/03-860.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/01-1720.avif",
+      "path": "assets/shots/fr-FR/01-1720.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/01-1720.webp",
+      "path": "assets/shots/fr-FR/01-1720.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/01-2868.avif",
+      "path": "assets/shots/fr-FR/01-2868.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/01-2868.webp",
+      "path": "assets/shots/fr-FR/01-2868.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/01-860.avif",
+      "path": "assets/shots/fr-FR/01-860.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/01-860.webp",
+      "path": "assets/shots/fr-FR/01-860.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/02-1720.avif",
+      "path": "assets/shots/fr-FR/02-1720.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/02-1720.webp",
+      "path": "assets/shots/fr-FR/02-1720.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/02-2868.avif",
+      "path": "assets/shots/fr-FR/02-2868.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/02-2868.webp",
+      "path": "assets/shots/fr-FR/02-2868.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/02-860.avif",
+      "path": "assets/shots/fr-FR/02-860.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/02-860.webp",
+      "path": "assets/shots/fr-FR/02-860.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/03-1720.avif",
+      "path": "assets/shots/fr-FR/03-1720.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/03-1720.webp",
+      "path": "assets/shots/fr-FR/03-1720.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/03-2868.avif",
+      "path": "assets/shots/fr-FR/03-2868.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/03-2868.webp",
+      "path": "assets/shots/fr-FR/03-2868.webp"
+    },
+    {
+      "source": "marketing/shots/fr-FR/03-860.avif",
+      "path": "assets/shots/fr-FR/03-860.avif"
+    },
+    {
+      "source": "marketing/shots/fr-FR/03-860.webp",
+      "path": "assets/shots/fr-FR/03-860.webp"
+    },
+    {
+      "source": "marketing/web/social-card.jpg",
+      "path": "assets/social-card.jpg"
     },
     {
       "source": "marketing/404.html",
       "path": "404.html"
-    },
-    {
-      "source": "site/assets/screenshots/en-US-01-launch-iphone-17-pro-max.png",
-      "path": "assets/screenshots/en-US-01-launch-iphone-17-pro-max.png"
-    },
-    {
-      "source": "site/assets/screenshots/en-US-02-mission-iphone-17-pro-max.png",
-      "path": "assets/screenshots/en-US-02-mission-iphone-17-pro-max.png"
-    },
-    {
-      "source": "site/assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png",
-      "path": "assets/screenshots/en-US-04-multiball-iphone-17-pro-max.png"
-    },
-    {
-      "source": "site/assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png",
-      "path": "assets/screenshots/fr-FR-01-launch-iphone-17-pro-max.png"
-    },
-    {
-      "source": "site/assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png",
-      "path": "assets/screenshots/fr-FR-02-mission-iphone-17-pro-max.png"
-    },
-    {
-      "source": "site/assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png",
-      "path": "assets/screenshots/fr-FR-04-multiball-iphone-17-pro-max.png"
     },
     {
       "source": "docs/privacy.html",
@@ -197,10 +408,6 @@
     {
       "source": "marketing/web/related/vesper.png",
       "path": "assets/apps/vesper.png"
-    },
-    {
-      "source": "marketing/web/social-card.jpg",
-      "path": "assets/social-card.jpg"
     }
   ],
   "content_overrides": {},

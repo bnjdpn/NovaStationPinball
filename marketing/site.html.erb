@@ -16,15 +16,15 @@
   <meta property="og:title" content="<%= h(page_title) %>">
   <meta property="og:description" content="<%= h(meta_description) %>">
   <meta property="og:url" content="<%= h(canonical_url) %>">
-  <meta property="og:image" content="<%= h(hero_raster_url) %>">
+  <meta property="og:image" content="<%= h(base_url + config.fetch("design_contract").fetch("hero_raster")) %>">
   <meta property="og:image:alt" content="<%= h(hero_alt) %>">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="<%= h(page_title) %>">
   <meta name="twitter:description" content="<%= h(meta_description) %>">
-  <meta name="twitter:image" content="<%= h(hero_raster_url) %>">
+  <meta name="twitter:image" content="<%= h(base_url + config.fetch("design_contract").fetch("hero_raster")) %>">
   <link rel="icon" href="<%= h(asset_prefix) %>assets/app-icon.png">
   <link rel="manifest" href="<%= h(asset_prefix) %>site.webmanifest">
-  <link rel="preload" as="image" href="<%= h(hero_raster) %>">
+  
   <link rel="stylesheet" href="<%= h(asset_prefix) %>assets/base.css">
   <link rel="stylesheet" href="<%= h(asset_prefix) %>assets/theme.css">
   <script type="application/ld+json"><%= json_ld %></script>
@@ -53,12 +53,11 @@
       </dl>
     </section>
 
-    <figure class="machine-bay">
-      <img src="<%= h(hero_raster) %>" width="1536" height="1024" alt="<%= h(hero_alt) %>" fetchpriority="high">
-      <figcaption><%= h(localized_value({"en" => "Original table key art", "fr" => "Key art original de la table"})) %></figcaption>
-    </figure>
+    <div class="machine-bay">
+      <% screenshots.each_with_index do |screenshot, index| %><figure class="table-plate<%= " table-plate--lead" if index.zero? %>"><%= shot_picture(screenshot, index: index, sizes: index.zero? ? "(max-width: 1440px) 100vw, 94vw" : "(max-width: 900px) 97vw, 738px", lead: index.zero?) %></figure><% end %>
+      <p class="machine-bay-note"><%= h(localized_value(config.fetch("editorial").fetch("proof_caption"))) %></p>
+    </div>
 
-    <% if screenshots.any? %><figure class="table-readback"><img src="<%= h(screenshot_src(screenshots.first)) %>" alt="<%= h(ui.fetch("preview")) %>" loading="lazy" decoding="async"><figcaption><%= h(localized_value(config.fetch("editorial").fetch("proof_caption"))) %></figcaption></figure><% end %>
 
     <section id="field-manual" class="field-manual" aria-labelledby="manual-title">
       <header><p><%= h(localized_value(config.fetch("editorial").fetch("section_kicker"))) %></p><h2 id="manual-title"><%= h(localized_value(config.fetch("editorial").fetch("section_heading"))) %></h2></header>

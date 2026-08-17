@@ -4,9 +4,13 @@ body { font-family: Georgia, "Times New Roman", serif; }
 .station-code { margin: 0; color: var(--brass); font: .7rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .18em; }
 .station-head .brand { justify-self: center; font-size: .9rem; letter-spacing: .04em; }
 .station-log { width: min(100% - 2rem, 92rem); margin-inline: auto; }
-.machine-bay { margin: 2rem 0 0; }
-.machine-bay img { width: 100%; max-height: 78svh; object-fit: cover; border: 1px solid var(--line); }
-.machine-bay figcaption { margin: .7rem 0 0; color: var(--muted); font: .66rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+/* Table paysage : captures de jeu reelles au ratio natif, jamais recadrees. */
+.machine-bay { width: min(100% - 2rem, 92rem); margin: 4rem auto 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: clamp(.7rem, 1.6vw, 1.4rem); }
+.table-plate { margin: 0; }
+.table-plate--lead { grid-column: 1 / -1; }
+.machine-bay picture { display: block; }
+.machine-bay img { width: 100%; height: auto; border: 1px solid var(--line); }
+.machine-bay-note { grid-column: 1 / -1; margin: .5rem 0 0; color: var(--muted); font: .66rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
 .mission-sheet { display: grid; grid-template-columns: 1.15fr .85fr; gap: clamp(3rem, 8vw, 9rem); padding: 6rem 4vw 5rem; border-bottom: 1px solid var(--line); }
 .eyebrow, .field-manual header p, .other-cabinet > p, .station-support header > p:first-child { margin: 0 0 1rem; color: var(--brass); font: .67rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; text-transform: uppercase; }
 h1 { max-width: 11ch; margin: 0; font-size: clamp(3.5rem, 8vw, 8rem); font-weight: 500; letter-spacing: -.055em; line-height: .88; }
@@ -17,7 +21,6 @@ h1 { max-width: 11ch; margin: 0; font-size: clamp(3.5rem, 8vw, 8rem); font-weigh
 .table-spec { grid-column: 1 / -1; margin: 4rem 0 0; border-top: 1px solid var(--line); }
 .table-spec div { display: grid; grid-template-columns: 5rem 1fr; padding: .9rem 0; border-bottom: 1px solid var(--line); }
 .table-spec dt { color: var(--cyan); font: .7rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }.table-spec dd { margin: 0; font-size: .95rem; }
-.table-readback { width: min(100%, 21rem); margin: 5rem auto 0; }.table-readback img { width: 100%; border: 1px solid var(--line); }.table-readback figcaption { margin-top: .7rem; color: var(--muted); font-size: .76rem; font-style: italic; text-align: center; }
 .field-manual { width: min(100%, 74rem); margin: 7rem auto 0; }
 .field-manual > header { display: grid; grid-template-columns: .5fr 1.5fr; gap: 2rem; }
 .field-manual h2, .other-cabinet h2, .station-support h2 { max-width: 18ch; margin: 0; font-size: clamp(2.2rem, 5vw, 4.8rem); font-weight: 500; letter-spacing: -.04em; line-height: .95; }
@@ -40,4 +43,7 @@ h1 { max-width: 11ch; margin: 0; font-size: clamp(3.5rem, 8vw, 8rem); font-weigh
 @media (max-width: 560px) {
   .mission-sheet { padding-top: 4rem; }.field-manual li p { margin-left: 0; }.field-manual h3 { margin-left: 1rem; }
   .station-footer { grid-template-columns: 1fr; }.station-footer .trademark-notice { grid-column: 1; }
+}
+@media (max-width: 900px) {
+  .machine-bay { grid-template-columns: 1fr; }
 }

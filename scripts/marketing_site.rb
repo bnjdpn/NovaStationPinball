@@ -396,6 +396,26 @@ module PortfolioMarketingSite
       url.start_with?(base_url) ? asset_prefix + url.delete_prefix(base_url) : url
     end
 
+    # Capture App Store reelle, servie en AVIF puis WebP, avec les dimensions
+    # intrinseques de la variante la plus large pour eviter tout etirement.
+    def shot_picture(screenshot, index:, sizes:, lead: false)
+      base = screenshot.fetch("base")
+      variants = screenshot.fetch("variants")
+      largest = variants.max_by { |variant| variant.fetch("w") }
+      srcset = lambda do |extension|
+        variants.map { |variant| "#{asset_prefix}#{base}-#{variant.fetch("w")}.#{extension} #{variant.fetch("w")}w" }.join(", ")
+      end
+      alt = "#{marketing_name} — #{ui.fetch("preview")} #{index + 1}"
+      loading = lead ? %(fetchpriority="high") : %(loading="lazy")
+      +"<picture>" \
+        "<source type=\"image/avif\" srcset=\"#{h(srcset.call("avif"))}\" sizes=\"#{h(sizes)}\">" \
+        "<img src=\"#{h("#{asset_prefix}#{base}-#{largest.fetch("w")}.webp")}\" " \
+        "srcset=\"#{h(srcset.call("webp"))}\" sizes=\"#{h(sizes)}\" " \
+        "width=\"#{largest.fetch("w")}\" height=\"#{largest.fetch("h")}\" " \
+        "alt=\"#{h(alt)}\" decoding=\"async\" #{loading}>" \
+        "</picture>"
+    end
+
     def description_paragraphs
       @description_paragraphs ||= paragraphs(@metadata.fetch("description"))
     end

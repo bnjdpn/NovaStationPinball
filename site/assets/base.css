@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif); background: var(--page); color: var(--ink); line-height: 1.55; text-rendering: optimizeLegibility; }
-img { display: block; max-width: 100%; }
+img { display: block; max-width: 100%; height: auto; }
 a { color: inherit; text-decoration-thickness: .08em; text-underline-offset: .2em; }
 button, input, textarea, select { font: inherit; }
 button, a, select, input, textarea { -webkit-tap-highlight-color: transparent; }
