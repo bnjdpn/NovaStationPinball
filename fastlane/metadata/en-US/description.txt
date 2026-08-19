@@ -1,4 +1,4 @@
-Take command of Nova Station, a complete retro-futuristic pinball table built for fast reactions and long score-chasing sessions.
+Learn one pinball table deeply — every ramp, lane, mission and multiball — the way arcade players once learned a real machine. Nova Station is that table: a retro-futuristic space station fighting to stay online.
 
 Every launch begins with three balls and a clear objective: keep the station online. Chain bumper hits, climb the ramps, open the portal, complete timed missions, earn nine clearance promotions and trigger multiball. A precise deterministic simulation keeps every rebound, flipper strike, nudge and tilt consistent.
 

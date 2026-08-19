@@ -1,1 +1,1 @@
-arcade,pinball,retro,space,offline,high scores,multiball,physics,classic game
+pinball machine,arcade,table,ball,space,flip,bumper,multiball,physics,offline

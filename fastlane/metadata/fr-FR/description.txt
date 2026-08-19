@@ -1,4 +1,4 @@
-Prenez le contrôle de Nova Station, une table de flipper rétrofuturiste complète, conçue pour les réflexes rapides et la chasse au score.
+Apprenez une table de flipper à fond — chaque rampe, couloir, mission et multibille — comme on apprenait une vraie machine d’arcade. Nova Station est cette table : une station spatiale rétrofuturiste qui lutte pour rester en ligne.
 
 Chaque partie commence avec trois billes et un objectif clair : maintenir la station en ligne. Enchaînez les bumpers, gravissez les rampes, ouvrez le portail, terminez les missions chronométrées, obtenez neuf promotions d’habilitation et déclenchez le multibille. Une simulation déterministe précise garantit des rebonds, frappes, secousses et tilts cohérents.
 
