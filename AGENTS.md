@@ -1,35 +1,52 @@
 # Nova Station Pinball
 
-> Isolation : `/private/tmp/apps-factory/NovaStationPinball/<execution_id>/`. Une
-> isolation complète du daemon CoreSimulator requiert une VM macOS éphémère ou un runner macOS éphémère.
-> Avant soumission, relire `fastlane/release_config.json.app_preview_policy`.
+Jeu de flipper iOS Swift 6 / SpriteKit. `NovaStationPinball.xcodeproj`,
+scheme `NovaStationPinball`, iOS 17+. Intention durable : gameplay
+déterministe et rejouable — règles, scoring et physique vivent dans le core,
+jamais dans l'UI.
 
-Jeu iOS Swift 6 / SpriteKit avec `NovaStationCore`; travailler dans ce dépôt,
-via `rtk proxy`, `NovaStationPinball.xcodeproj` et le scheme homonyme.
+## Commandes
 
-- Garder règles de jeu, scoring et physique déterministes dans le core, avec
-  tests indépendants de l'UI. Réseau, analytics, compte et publicité exigent
-  un plan app-spécifique approuvé.
-- Le modèle commercial approuvé peut inclure prix upfront, achat unique,
-  abonnement, paywall ou pourboires, avec confiance, confidentialité,
-  conformité Apple et migration loyale. La config décrit l'offre courante.
-- Maintenir les médias dans `Art/` et les artefacts retenus sous `Builds/`; ne
-  pas confondre cache `.build` avec preuve de release.
-- La preview est applicable : exécuter le générateur app-local défini dans
-  `release_config.json` pour ses scénarios, avec au plus deux locales lourdes.
-- Une release passe par Fastlane/ASC API, `release_contract`, puis readback
-  complet avant commit/push. Support via Formspree, jamais email public;
-  aucun workflow GitHub Actions ni secret Git.
+- Projet généré par XcodeGen : éditer `project.yml` puis `xcodegen generate`
+  (ne jamais éditer le `.pbxproj` à la main).
+- Tests core SwiftPM (package racine `Package.swift`) :
+  `swift test --scratch-path /private/tmp/apps-factory/NovaStationPinball/<execution_id>/spm`
+- Contrat de release local : `ruby scripts/release_contract_test.rb` puis
+  `bundle exec fastlane release_contract` (enchaîne aussi les tests Ruby ASC).
+- Site : `ruby scripts/marketing_site.rb` puis `--check` avant release.
+- Lanes ASC (via wrapper portefeuille) : `asc_status`, `metadata`,
+  `screenshots`, `app_previews`, `adopt_media`, `media_contract`,
+  `build_release`, `upload_release`, `submit_review`, `release_quick`,
+  `pricing`, `iap_status`, `iap_sync`.
 
+## Architecture (pointeurs)
+
+- `NovaStationCore/` : lib SwiftPM — règles de jeu, scoring, physique
+  déterministes, testés indépendamment de l'UI (`NovaStationCore/Tests/`).
+- `NovaStationPinball/` : app SpriteKit/SwiftUI (cibles définies aussi comme
+  targets SwiftPM `NovaStationLifecycle` pour testabilité).
+- `scripts/app_store/` : pipeline ASC complet (client, adopt_media,
+  generate_app_previews, readback, wait_for_state) avec ses tests `*_test.rb`.
+- `scripts/final_validation_pool.rb` : pool/lease de simulateurs pour la
+  validation finale (devices et runtime requis figés dans le script).
+- `Art/` : sources médias ; `Builds/` : artefacts de release retenus — ne
+  jamais confondre le cache `.build` avec une preuve de release.
+
+## Contraintes apprises
+
+- App preview APPLICABLE (`fastlane/release_config.json.app_preview_policy`) :
+  générer via `scripts/app_store/generate_app_previews.rb` pour les scénarios
+  configurés, au plus 2 locales en parallèle ; relire la policy avant chaque
+  soumission.
+- Le handshake preview ne doit pas dépendre d'un export shell autour de
+  xcodebuild (vérifié par `scripts/release_contract.rb`).
+- Release : `release_contract` → mutations ASC → readback complet avant
+  commit/push.
 
 ## Site marketing
 
-- Le site GitHub Pages est une surface produit app-locale : sa direction est
-  documentée dans `site/DIRECTION.md` et ne doit pas être remplacée par un
-  template visuel commun au portefeuille.
-- Toute évolution publique de fonctionnalité, version, localisation, support,
-  confidentialité ou métadonnée doit mettre à jour les sources `marketing/`,
-  régénérer la sortie publique avec `ruby scripts/marketing_site.rb`, puis
-  réussir `ruby scripts/marketing_site.rb --check` avant release.
-- Le workflow `.github/workflows/pages.yml` ne publie que l’artefact statique
-  isolé. Il ne construit, ne teste, ne signe et ne livre jamais l’app native.
+- Sortie générée dans `site/` (PAS `docs/` — `docs/` contient stratégie ASO
+  et plans) ; ne jamais éditer la sortie à la main.
+- `site/DIRECTION.md` : direction visuelle, provenance des assets, registre
+  des prompts ImageGen et règles anti-cliché — à relire avant tout changement
+  de page ; jamais remplacé par un template commun au portefeuille.
