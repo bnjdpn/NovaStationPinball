@@ -25,6 +25,21 @@ NOVA_TEAM_ID = "767SX34A7Z"
 NOVA_PROFILE_NAME = "NovaStationPinball_AppStore"
 NOVA_SCREENSHOT_COUNT = 36
 NOVA_PREVIEW_COUNT = 6
+NOVA_SIMULATOR_UDID = /\A[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\z/.freeze
+
+# The capture pipelines address one leased simulator by its exact UDID. A
+# device name or `booted` resolves to whatever happens to be running, which is
+# how a capture ends up describing a machine nobody chose.
+def nova_capture_simulator_udid!
+  value = ENV["FACTORY_SIMULATOR_UDID"].to_s.strip
+  unless NOVA_SIMULATOR_UDID.match?(value)
+    UI.user_error!(
+      "FACTORY_SIMULATOR_UDID must be an execution-owned simulator UUID " \
+      "(never `booted`, never a device name): #{value.inspect}"
+    )
+  end
+  value
+end
 
 def nova_app_root
   File.expand_path("..", __dir__)
@@ -464,6 +479,15 @@ platform :ios do
     end
   end
 
+  desc "Capture the Workshop paywall for the App Store Connect in-app-purchase review"
+  lane :paywall_review_screenshot do
+    sh(
+      RbConfig.ruby,
+      File.join(nova_app_root, "scripts/capture_paywall_review_screenshot.rb"),
+      "--udid", nova_capture_simulator_udid!
+    )
+  end
+
   desc "Read version, metadata, COMPLETE media, exact build, configured price, products and submission"
   lane :asc_status do
     nova_run_asc_tool(
@@ -695,7 +719,7 @@ platform :ios do
     NovaStationPinballReleaseSupport.mark_observed!(**upload_proof)
   end
 
-  desc "Submit the exact selected build and reviewable tip versions at most once"
+  desc "Submit the exact selected build and the reviewable versions of the declared in-app purchases at most once"
   lane :submit_review do
     nova_run_asc_tool(
       "review_submission",
@@ -716,12 +740,12 @@ platform :ios do
     nova_run_asc_tool("pricing", "--bundle-id", NOVA_BUNDLE_ID)
   end
 
-  desc "Read and enforce exactly the three optional consumable tips"
+  desc "Read the in-app purchase catalogue back and enforce exactly the products declared by release_config.json"
   lane :iap_status do
     nova_run_asc_tool("iap_status", "--bundle-id", NOVA_BUNDLE_ID)
   end
 
-  desc "Fail closed for IAP mutation; setup must be an explicitly authorized task"
+  desc "Fail closed for IAP mutation; provisioning the declared products must be an explicitly authorized task"
   lane :iap_sync do
     nova_run_asc_tool("iap_sync", "--bundle-id", NOVA_BUNDLE_ID)
   end

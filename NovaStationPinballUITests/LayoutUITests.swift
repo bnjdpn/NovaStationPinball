@@ -47,8 +47,11 @@ final class LayoutUITests: XCTestCase {
 
         XCTAssertTrue(app.otherElements["tableGuideStep.controls"].waitForExistence(timeout: 3))
 
-        let next = app.buttons["tableGuideNext"]
-        XCTAssertTrue(next.exists)
+        // SwiftUI collapses the navigation row's identifier onto its buttons
+        // on current iOS, so the forward control is resolved through the row
+        // itself — the same way AppPreviewUITests already does.
+        let next = guideForwardControl(in: app)
+        XCTAssertTrue(next.waitForExistence(timeout: 3))
         next.tap()
         XCTAssertTrue(app.otherElements["tableGuideStep.missions"].waitForExistence(timeout: 3))
         let missionBody = app.staticTexts["tableGuideStepBody"]
@@ -63,7 +66,7 @@ final class LayoutUITests: XCTestCase {
         next.tap()
         XCTAssertTrue(app.otherElements["tableGuideStep.progress"].waitForExistence(timeout: 3))
 
-        let done = app.buttons["tableGuideDone"]
+        let done = guideForwardControl(in: app)
         XCTAssertTrue(done.exists)
         done.tap()
 
@@ -71,7 +74,7 @@ final class LayoutUITests: XCTestCase {
         XCTAssertTrue(open.waitForExistence(timeout: 2))
     }
 
-    func testTipJarRendersProviderNamesAndPricesPurchasesAndCloses() {
+    func testWorkshopExposesRewindReviewAndDrillsAndCloses() {
         XCUIDevice.shared.orientation = .landscapeRight
         let app = XCUIApplication()
         app.launchArguments += [
@@ -79,41 +82,154 @@ final class LayoutUITests: XCTestCase {
             "-AppleLanguages", "(en)",
             "-AppleLocale", "en_US"
         ]
-        app.launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"
         app.launch()
 
-        let open = app.buttons["tipJarOpen"]
+        let open = app.buttons["workshopOpen"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         open.tap()
 
-        XCTAssertTrue(app.alerts["tipJar"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.alerts["workshop"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.otherElements["art.frame.4x3"].exists)
         XCTAssertFalse(app.otherElements["art.table"].exists)
         XCTAssertFalse(app.otherElements["art.console"].exists)
-        XCTAssertGreaterThanOrEqual(app.buttons["tipJarClose"].frame.width, 44)
-        XCTAssertGreaterThanOrEqual(app.buttons["tipJarClose"].frame.height, 44)
-        let expected = [
-            ("tip.cafe", "Coffee", "0.99"),
-            ("tip.merci", "Big thanks", "2.99"),
-            ("tip.soutien", "Strong support", "5.99")
-        ]
-        for (identifier, name, price) in expected {
-            let button = app.buttons["tipJarPurchase.\(identifier)"]
-            XCTAssertTrue(button.waitForExistence(timeout: 5), identifier)
-            XCTAssertTrue(button.label.contains(name), button.label)
-            XCTAssertTrue(button.label.contains(price), button.label)
+        XCTAssertGreaterThanOrEqual(app.buttons["workshopClose"].frame.width.rounded(), 44)
+        XCTAssertGreaterThanOrEqual(app.buttons["workshopClose"].frame.height.rounded(), 44)
+
+        for identifier in ["back-3", "back-5", "ball-start"] {
+            XCTAssertTrue(
+                app.buttons["workshopRewind.\(identifier)"].waitForExistence(timeout: 3),
+                identifier
+            )
         }
+        XCTAssertTrue(app.buttons["workshopReview.ball-start"].exists)
+        for identifier in ["ramp-left", "portal", "multiball"] {
+            XCTAssertTrue(
+                app.buttons["workshopDrill.\(identifier)"].waitForExistence(timeout: 3),
+                identifier
+            )
+        }
+        // Drill names are looked up in the catalog: a raw key on the screen
+        // that sells the Workshop is a shipping defect, not a placeholder.
+        XCTAssertTrue(app.buttons["workshopDrill.ramp-left"].label.contains("Left ramp"),
+                      app.buttons["workshopDrill.ramp-left"].label)
+        XCTAssertFalse(app.staticTexts["drill.ramp-left"].exists)
 
-        app.buttons["tipJarPurchase.tip.cafe"].tap()
-        XCTAssertTrue(app.staticTexts["tipJarStatus"].waitForExistence(timeout: 3))
-        XCTAssertEqual(
-            app.staticTexts["tipJarStatus"].label,
-            "Thank you! This tip changes nothing in the game."
-        )
-        XCTAssertTrue(app.buttons["tipJarPurchase.tip.cafe"].isEnabled)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "workshop-overlay"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
 
-        app.buttons["tipJarClose"].tap()
-        XCTAssertFalse(app.alerts["tipJar"].waitForExistence(timeout: 1))
+        app.buttons["workshopClose"].tap()
+        XCTAssertFalse(app.alerts["workshop"].waitForExistence(timeout: 1))
         XCTAssertTrue(open.waitForExistence(timeout: 2))
+    }
+
+    /// The whole sold loop, on the device: start an attempt, watch it reach a
+    /// verdict on screen, serve the same shot again, then leave the drill.
+    func testDrillAttemptShowsItsCountdownVerdictRetryAndExit() {
+        XCUIDevice.shared.orientation = .landscapeRight
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-ui-testing",
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US"
+        ]
+        app.launch()
+
+        let open = app.buttons["workshopOpen"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        startDrill("ramp-left", in: app)
+
+        let hud = app.otherElements["workshopDrillHUD"]
+        XCTAssertTrue(hud.exists)
+        let status = app.staticTexts["workshopDrillStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertTrue(status.label.contains("left in this attempt"), status.label)
+        XCTAssertTrue(app.staticTexts["workshopDrillRecord"].exists)
+        XCTAssertEqual(app.staticTexts["workshopDrillName"].label, "Left ramp")
+
+        let retry = app.buttons["workshopDrillRetry"]
+        let exit = app.buttons["workshopDrillExit"]
+        XCTAssertTrue(retry.exists)
+        XCTAssertTrue(exit.exists)
+        XCTAssertGreaterThanOrEqual(retry.frame.height.rounded(), 44)
+        XCTAssertGreaterThanOrEqual(exit.frame.height.rounded(), 44)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "drill-attempt-running"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        // The attempt budget is twenty simulated seconds and the table runs in
+        // real time, so the verdict is waited for, never assumed.
+        let decided = expectation(
+            for: NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Attempt over", "Target hit"),
+            evaluatedWith: status
+        )
+        wait(for: [decided], timeout: 45)
+
+        let verdict = XCTAttachment(screenshot: app.screenshot())
+        verdict.name = "drill-attempt-decided"
+        verdict.lifetime = .keepAlways
+        add(verdict)
+
+        retry.tap()
+        let restarted = expectation(
+            for: NSPredicate(format: "label CONTAINS %@", "left in this attempt"),
+            evaluatedWith: status
+        )
+        wait(for: [restarted], timeout: 10)
+
+        exit.tap()
+        let left = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: hud)
+        wait(for: [left], timeout: 10)
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    func testPaywallRendersProviderNameAndPriceWithRestoreAndLegalLinks() {
+        XCUIDevice.shared.orientation = .landscapeRight
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-ui-testing",
+            "-paywall-screenshot",
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US"
+        ]
+        app.launchEnvironment["NOVA_STORE_FIXTURE"] = "available"
+        app.launch()
+
+        XCTAssertTrue(app.alerts["paywall"].waitForExistence(timeout: 8))
+        let purchase = app.buttons["paywallPurchase"]
+        XCTAssertTrue(purchase.waitForExistence(timeout: 8))
+        XCTAssertTrue(purchase.label.contains("The Workshop"), purchase.label)
+        XCTAssertTrue(purchase.label.contains("4.99"), purchase.label)
+        XCTAssertTrue(app.buttons["paywallRestore"].exists)
+        XCTAssertTrue(app.staticTexts["paywallTerms"].exists)
+        XCTAssertTrue(element(app, "paywallTermsLink").waitForExistence(timeout: 3))
+        XCTAssertTrue(element(app, "paywallPrivacyLink").waitForExistence(timeout: 3))
+        XCTAssertGreaterThanOrEqual(app.buttons["paywallClose"].frame.width.rounded(), 44)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "workshop-paywall"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        app.buttons["paywallClose"].tap()
+        XCTAssertFalse(app.alerts["paywall"].waitForExistence(timeout: 1))
+    }
+
+    /// SwiftUI exposes `Link` as a button on some releases and as a link on
+    /// others; the contract is the stable identifier, not the element type.
+    private func element(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    /// Last control of the guide navigation row: "next" on the first steps,
+    /// "done" on the last one.
+    private func guideForwardControl(in app: XCUIApplication) -> XCUIElement {
+        let named = app.buttons["tableGuideNext"]
+        if named.exists { return named }
+        let row = app.buttons.matching(identifier: "tableGuideNavigation")
+        return row.element(boundBy: max(0, row.count - 1))
     }
 }

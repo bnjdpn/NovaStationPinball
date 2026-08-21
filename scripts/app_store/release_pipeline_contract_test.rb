@@ -5,7 +5,9 @@ require "digest"
 require "json"
 require "minitest/autorun"
 require_relative "adopt_media"
+require_relative "iap_status"
 require_relative "metadata_pretransport_recovery"
+require_relative "review_submission"
 
 class NovaStationPinballReleasePipelineContractTest < Minitest::Test
   ROOT = File.expand_path("../..", __dir__)
@@ -17,14 +19,17 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
 
   def test_checkpoint_pipeline_configuration_is_exact_and_app_local
     config = JSON.parse(File.binread(CONFIG_PATH))
-    assert_equal "1.0", config.fetch("version")
+    assert_match(/\A\d+\.\d+(?:\.\d+)?\z/, config.fetch("version"))
     assert_equal "NovaStationPinball.xcodeproj", config.fetch("project")
     assert_equal "NovaStationPinball", config.fetch("scheme")
     assert_equal "767SX34A7Z", config.fetch("team_id")
     assert_equal "Builds/AppStore/NovaStationPinball", config.fetch("artifact_root")
     assert_equal "/private/tmp/apps-factory/NovaStationPinball", config.fetch("scratch_root")
-    configured_products = config.fetch("tip_products")
+    configured_products = config.fetch("iap_products")
     assert_equal configured_products.map { |product| product.fetch("product_id") }, config.fetch("iap")
+    assert_equal "one_time_unlock", config.fetch("monetization_strategy").fetch("model")
+    assert_equal "fastlane/pro_products.json",
+                 config.fetch("monetization_strategy").fetch("products_manifest")
     assert_operator BigDecimal(config.fetch("pricing").fetch("price")), :>=, BigDecimal("0")
     assert_equal "FRA", config.fetch("pricing").fetch("territory")
     assert_equal "EUR", config.fetch("pricing").fetch("currency")
@@ -254,6 +259,177 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_includes submit, "NovaStationPinballReleaseSupport.transport_once!"
     assert_includes submit, "NovaStationPinballReleaseSupport.mark_observed!"
     assert_includes submit, "review_submitted?"
+  end
+
+  # A stub App Store Connect: the only thing the submission path is allowed to
+  # know about the purchase catalogue is what the release configuration says.
+  class StubClient
+    def initialize(purchases:, versions:)
+      @purchases = purchases
+      @versions = versions
+    end
+
+    def get_all(path, _query = {})
+      case path
+      when %r{\A/v1/apps/[^/]+/inAppPurchasesV2\z}
+        { "data" => @purchases }
+      when %r{\A/v2/inAppPurchases/([^/]+)/versions\z}
+        { "data" => @versions.fetch(Regexp.last_match(1), []) }
+      else
+        raise "unexpected request: #{path}"
+      end
+    end
+  end
+
+  def purchase(id:, product_id:, type:, state:)
+    {
+      "id" => id, "type" => "inAppPurchases",
+      "attributes" => {
+        "productId" => product_id, "inAppPurchaseType" => type, "state" => state
+      }
+    }
+  end
+
+  def purchase_version(id:, version:, state:)
+    {
+      "id" => id, "type" => "inAppPurchaseVersions",
+      "attributes" => { "version" => version, "state" => state }
+    }
+  end
+
+  def workshop_client(type: "NON_CONSUMABLE", state: "READY_TO_SUBMIT",
+                      version_state: "PREPARE_FOR_SUBMISSION")
+    StubClient.new(
+      purchases: [
+        purchase(
+          id: "iap-1", product_id: "com.bnjdpn.NovaStationPinball.workshop",
+          type: type, state: state
+        )
+      ],
+      versions: {
+        "iap-1" => [purchase_version(id: "iapv-1", version: "1", state: version_state)]
+      }
+    )
+  end
+
+  # Regression guarded here: the shipped release sells a non-consumable
+  # unlock, and the submission path must carry it instead of raising about the
+  # removed jar.
+  def test_the_configured_non_consumable_unlock_goes_through_the_submission_path
+    config = JSON.parse(File.binread(CONFIG_PATH))
+    products = NovaStationPinballReviewSubmission.declared_products(config)
+    assert_equal ["com.bnjdpn.NovaStationPinball.workshop"],
+                 products.map { |product| product.fetch("product_id") }
+    assert_equal ["NON_CONSUMABLE"], products.map { |product| product.fetch("type") }
+
+    records = NovaStationPinballReviewSubmission.product_submission_records(
+      workshop_client, "app-1", products
+    )
+    assert_equal 1, records.length
+    record = records.fetch(0)
+    assert_equal "iapv-1", record.fetch("version_id")
+    assert record.fetch("must_bundle"),
+           "a product App Store Connect has never approved must ride with the version"
+    assert record.fetch("required")
+
+    required = NovaStationPinballReviewSubmission.required_resources("v-1", records)
+    assert_equal [
+      ["appStoreVersions", "v-1"], ["inAppPurchaseVersions", "iapv-1"]
+    ], required
+  end
+
+  def test_the_submission_path_reports_a_type_mismatch_against_the_configuration
+    config = JSON.parse(File.binread(CONFIG_PATH))
+    products = NovaStationPinballReviewSubmission.declared_products(config)
+    error = assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.product_submission_records(
+        workshop_client(type: "CONSUMABLE"), "app-1", products
+      )
+    end
+    assert_includes error.message, "release configuration"
+    assert_includes error.message, "com.bnjdpn.NovaStationPinball.workshop"
+    refute_match(/\btips?\b/i, error.message,
+                 "the submission path must not talk about the removed jar")
+  end
+
+  def test_an_already_shipped_product_is_only_resubmitted_when_it_needs_review
+    products = [
+      { "product_id" => "com.bnjdpn.NovaStationPinball.workshop", "type" => "NON_CONSUMABLE" }
+    ]
+    settled = NovaStationPinballReviewSubmission.product_submission_records(
+      workshop_client(state: "APPROVED", version_state: "APPROVED"), "app-1", products
+    ).fetch(0)
+    refute settled.fetch("must_bundle")
+    refute settled.fetch("required")
+    assert_equal [["appStoreVersions", "v-1"]],
+                 NovaStationPinballReviewSubmission.required_resources("v-1", [settled])
+
+    updated = NovaStationPinballReviewSubmission.product_submission_records(
+      workshop_client(state: "APPROVED", version_state: "READY_FOR_REVIEW"), "app-1", products
+    ).fetch(0)
+    refute updated.fetch("must_bundle")
+    assert updated.fetch("required")
+  end
+
+  # The readback that AGENTS.md requires after every ASC mutation must accept
+  # the shipped catalogue and refuse a product left in the wrong state.
+  def test_the_iap_readback_is_driven_by_the_release_configuration
+    config = JSON.parse(File.binread(CONFIG_PATH))
+    declared = NovaStationPinballIapStatus.declared(config)
+    retired = NovaStationPinballIapStatus.retired(config)
+    assert_equal ["com.bnjdpn.NovaStationPinball.workshop"],
+                 declared.map { |product| product.fetch("product_id") }
+    assert_equal 3, retired.length
+    assert retired.all? { |product| product.fetch("target_state") == "DEVELOPER_REMOVED_FROM_SALE" }
+
+    settled_items = [
+      purchase(id: "iap-1", product_id: "com.bnjdpn.NovaStationPinball.workshop",
+               type: "NON_CONSUMABLE", state: "READY_TO_SUBMIT")
+    ] + retired.map.with_index do |product, index|
+      purchase(id: "iap-r#{index}", product_id: product.fetch("product_id"),
+               type: "CONSUMABLE", state: "DEVELOPER_REMOVED_FROM_SALE")
+    end
+    assert_empty NovaStationPinballIapStatus.problems(
+      iap_payload(settled_items, declared, retired), declared, retired
+    )
+
+    live_tips = settled_items.map do |item|
+      next item unless item.dig("attributes", "productId").include?(".tip.")
+
+      copy = Marshal.load(Marshal.dump(item))
+      copy["attributes"]["state"] = "WAITING_FOR_REVIEW"
+      copy
+    end
+    problems = NovaStationPinballIapStatus.problems(
+      iap_payload(live_tips, declared, retired), declared, retired
+    )
+    assert_equal 3, problems.length
+    assert problems.all? { |problem| problem.include?("DEVELOPER_REMOVED_FROM_SALE") }
+
+    wrong_type = settled_items.map do |item|
+      next item unless item.dig("attributes", "productId").end_with?(".workshop")
+
+      copy = Marshal.load(Marshal.dump(item))
+      copy["attributes"]["inAppPurchaseType"] = "CONSUMABLE"
+      copy
+    end
+    assert_equal 1, NovaStationPinballIapStatus.problems(
+      iap_payload(wrong_type, declared, retired), declared, retired
+    ).length
+  end
+
+  def iap_payload(items, declared, retired)
+    expected_ids = declared.map { |product| product.fetch("product_id") }
+    retired_ids = retired.map { |product| product.fetch("product_id") }
+    actual_ids = items.map { |item| item.dig("attributes", "productId") }
+    {
+      "expected_count" => expected_ids.length,
+      "actual_count" => items.length,
+      "missing_product_ids" => (expected_ids - actual_ids).sort,
+      "unexpected_product_ids" => (actual_ids - expected_ids - retired_ids).sort,
+      "retired_product_ids" => (actual_ids & retired_ids).sort,
+      "items" => items
+    }
   end
 
   private

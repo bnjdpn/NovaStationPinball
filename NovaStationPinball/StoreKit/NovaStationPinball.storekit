@@ -3,40 +3,16 @@
   "nonRenewingSubscriptions" : [],
   "products" : [
     {
-      "displayPrice" : "0.99",
+      "displayPrice" : "4.99",
       "familyShareable" : false,
-      "internalID" : "BC138F39-52A8-4505-B7CA-2F5268545E9C",
+      "internalID" : "6F1C0B84-7B0E-4F35-9E3E-2C6C1E8B4A17",
       "localizations" : [
-        { "description" : "Optional tip. Unlocks no features.", "displayName" : "Coffee", "locale" : "en_US" },
-        { "description" : "Don facultatif. Ne débloque aucune fonctionnalité.", "displayName" : "Café", "locale" : "fr_FR" }
+        { "description" : "Unlimited rewind and shot drills.", "displayName" : "The Workshop", "locale" : "en_US" },
+        { "description" : "Rembobinage illimité et atelier de tir.", "displayName" : "L’Atelier", "locale" : "fr_FR" }
       ],
-      "productID" : "com.bnjdpn.NovaStationPinball.tip.cafe",
-      "referenceName" : "Nova Station Pinball Tip Cafe",
-      "type" : "Consumable"
-    },
-    {
-      "displayPrice" : "2.99",
-      "familyShareable" : false,
-      "internalID" : "1A507A2A-37A5-47DA-98D0-9DFE2FA39752",
-      "localizations" : [
-        { "description" : "Optional tip. Unlocks no features.", "displayName" : "Big thanks", "locale" : "en_US" },
-        { "description" : "Don facultatif. Ne débloque aucune fonctionnalité.", "displayName" : "Grand merci", "locale" : "fr_FR" }
-      ],
-      "productID" : "com.bnjdpn.NovaStationPinball.tip.merci",
-      "referenceName" : "Nova Station Pinball Tip Merci",
-      "type" : "Consumable"
-    },
-    {
-      "displayPrice" : "5.99",
-      "familyShareable" : false,
-      "internalID" : "D0994E2F-4A90-4CD5-AAD8-F85F8E482D99",
-      "localizations" : [
-        { "description" : "Optional tip. Unlocks no features.", "displayName" : "Strong support", "locale" : "en_US" },
-        { "description" : "Don facultatif. Ne débloque aucune fonctionnalité.", "displayName" : "Beau soutien", "locale" : "fr_FR" }
-      ],
-      "productID" : "com.bnjdpn.NovaStationPinball.tip.soutien",
-      "referenceName" : "Nova Station Pinball Tip Soutien",
-      "type" : "Consumable"
+      "productID" : "com.bnjdpn.NovaStationPinball.workshop",
+      "referenceName" : "Nova Station Pinball Workshop",
+      "type" : "NonConsumable"
     }
   ],
   "settings" : {

@@ -92,6 +92,11 @@ public struct GameSessionFrame: Sendable, Codable, Equatable {
 public struct GameSession: Sendable {
     public private(set) var rules: GameRulesState
     public private(set) var phase: GameSessionPhase
+    /// True as soon as the run used the Workshop (a rewind, a review or a
+    /// shot drill). Irreversible for the whole run: only `startNewGame()`
+    /// clears it. Assisted runs never reach the ranked high scores or Game
+    /// Center, which is what keeps the leaderboard honest.
+    public private(set) var isAssisted = false
     private var simulation: PinballSimulation
     private var nextBallID: UInt64
     private var recordingInitialState: GameSessionState
@@ -100,6 +105,10 @@ public struct GameSession: Sendable {
     private var armedShooterCommand: String?
 
     public var snapshot: SimulationSnapshot { simulation.snapshot }
+    /// Complete state of the session on the current tick, suitable for a
+    /// rewind keyframe.
+    public var sessionState: GameSessionState { currentState }
+    public var recordedInputCount: Int { recordedInputs.count }
     public var physicsTiltState: TiltState { simulation.tiltState }
     public var table: TableDefinition { simulation.table }
     public var checkpoint: GameSessionCheckpoint {
@@ -163,8 +172,38 @@ public struct GameSession: Sendable {
         recordedInputs = checkpoint.recordedInputs
     }
 
+    /// Player inputs recorded from `index` onwards, in order. Drives the
+    /// Workshop review playback.
+    public func recordedInputs(from index: Int) -> [PlayerInput] {
+        let start = min(max(0, index), recordedInputs.count)
+        return recordedInputs[start...].map(\.input)
+    }
+
+    /// Restores the exact state captured by `mark` and truncates the input
+    /// stream to it, so the resulting session is both playable on the next
+    /// tick and still a valid Replay v3 recording. The result is always
+    /// flagged assisted.
+    public func rewound(to mark: RewindMark) throws -> GameSession {
+        let index = min(max(0, mark.inputIndex), recordedInputs.count)
+        var session = try GameSession(checkpoint: GameSessionCheckpoint(
+            currentState: mark.state,
+            recordingInitialState: recordingInitialState,
+            recordedInputs: Array(recordedInputs.prefix(index))
+        ))
+        session.isAssisted = true
+        return session
+    }
+
+    /// Flags the run as assisted without changing any simulation state. Used
+    /// when a drill starts and when an assisted run is restored from its
+    /// device-local marker after a relaunch.
+    public mutating func markAssisted() {
+        isAssisted = true
+    }
+
     @discardableResult
     public mutating func startNewGame() throws -> GameSessionFrame {
+        isAssisted = false
         rules = GameRulesState()
         rules.activateBallSave()
         phase = .playing

@@ -114,7 +114,11 @@ final class OptionalEffectsLifecycleTests: XCTestCase {
             hapticsService: haptics,
             gameCenterClient: NullGameCenterClient(),
             localGameStore: LocalGameStore(defaults: defaults, directory: directory),
-            tipJarSupport: NullTipJarSupport()
+            store: StoreService(
+                backend: NullWorkshopStoreBackend(),
+                userDefaults: defaults,
+                bypassesStore: false
+            )
         )
         return OptionalEffectsHarness(
             model: model,

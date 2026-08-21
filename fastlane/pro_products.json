@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "app": "NovaStationPinball",
+  "bundle_id": "com.bnjdpn.NovaStationPinball",
+  "base_territory": "FRA",
+  "base_currency": "EUR",
+  "notes": "Source de vérité du produit payant de Nova Station Pinball dans App Store Connect. Le produit n'existe pas encore côté ASC : il doit être créé, attaché au draft de la version 1.1 et propagé par price points + equalizations, puis relu intégralement (VALID ne suffit pas). Limites ASC respectées : display name <= 30 caractères, description <= 45 caractères. Une localisation par locale de la fiche (en-US, fr-FR). Les trois pourboires consommables 1.0 (tip.cafe, tip.merci, tip.soutien) doivent passer en DEVELOPER_REMOVED_FROM_SALE : le binaire 1.1 ne contient plus de tip jar.",
+  "subscription_group": null,
+  "products": [
+    {
+      "product_id": "com.bnjdpn.NovaStationPinball.workshop",
+      "reference_name": "Nova Station Pinball Workshop",
+      "type": "NON_CONSUMABLE",
+      "base_price": "4.99",
+      "family_sharable": false,
+      "introductory_offer": null,
+      "localizations": {
+        "en-US": { "name": "The Workshop", "description": "Unlimited rewind, replay and shot drills." },
+        "fr-FR": { "name": "L’Atelier", "description": "Rembobinage, revisionnage et atelier de tir." }
+      },
+      "review_screenshot": "review_assets/workshop_paywall_review.png",
+      "review_notes": "One-time purchase unlocking the Workshop: unlimited ball rewind (-3 s, -5 s, start of ball) with resume in hand, replay from five seconds back at 1x or 0.5x, and 14 shot drills served from an identical state with success rate and best streak. Free for everyone without this purchase: the complete table, the 17 missions, the nine clearance promotions, multiball, tilt, the interactive guide, local high scores, the optional Game Center leaderboard, three rewinds per game and the replay of the ball in play at 1x or 0.5x. Runs that used the Workshop are ranked on a separate local training board and are never submitted to Game Center. Reachable from the Workshop button in the top-right corner of the table, then Unlock the Workshop; also reached when the free rewind allowance for a game is spent or when a shot drill is opened. Reviewer capture: launch the app with the -paywall-screenshot argument to open the paywall directly. The attached screenshot is that paywall, captured by scripts/capture_paywall_review_screenshot.rb on an iPad Pro 13-inch simulator with the store bypass off, so it shows the real locked offer."
+    }
+  ],
+  "removed_from_sale": [
+    {
+      "product_id": "com.bnjdpn.NovaStationPinball.tip.cafe",
+      "type": "CONSUMABLE",
+      "target_state": "DEVELOPER_REMOVED_FROM_SALE",
+      "reason": "Tip jar removed from the binary in 1.1: an app that sells a product no longer asks for tips."
+    },
+    {
+      "product_id": "com.bnjdpn.NovaStationPinball.tip.merci",
+      "type": "CONSUMABLE",
+      "target_state": "DEVELOPER_REMOVED_FROM_SALE",
+      "reason": "Tip jar removed from the binary in 1.1: an app that sells a product no longer asks for tips."
+    },
+    {
+      "product_id": "com.bnjdpn.NovaStationPinball.tip.soutien",
+      "type": "CONSUMABLE",
+      "target_state": "DEVELOPER_REMOVED_FROM_SALE",
+      "reason": "Tip jar removed from the binary in 1.1: an app that sells a product no longer asks for tips."
+    }
+  ]
+}

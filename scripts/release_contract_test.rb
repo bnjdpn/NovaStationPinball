@@ -1,19 +1,23 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require "digest"
 require "json"
 require "minitest/autorun"
 require "open3"
 require "pathname"
+require "fileutils"
+require "tmpdir"
 require "yaml"
 require_relative "pages_workflow_contract"
+require_relative "release_contract"
 
 class ReleaseContractTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
   REQUIRED_LANES = %w[
     setup_asc release_contract asc_status metadata screenshots app_previews adopt_media media_contract upload_screenshots
     upload_previews build_release upload_release submit_review release_quick pricing
-    iap_status iap_sync
+    iap_status iap_sync paywall_review_screenshot
   ].freeze
 
   def test_repository_contract_is_complete
@@ -30,8 +34,11 @@ class ReleaseContractTest < Minitest::Test
     assert_equal "1,2", settings.fetch("TARGETED_DEVICE_FAMILY")
     assert_equal "17.0", app_target.fetch("deploymentTarget")
     info = app_target.fetch("info").fetch("properties")
-    assert_equal "1.0", settings.fetch("MARKETING_VERSION")
-    assert_equal "1", settings.fetch("CURRENT_PROJECT_VERSION")
+    release_config_version = JSON.parse(
+      File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8")
+    ).fetch("version")
+    assert_equal release_config_version, settings.fetch("MARKETING_VERSION")
+    assert_match(/\A[1-9][0-9]*\z/, settings.fetch("CURRENT_PROJECT_VERSION"))
     assert_equal "$(MARKETING_VERSION)", info.fetch("CFBundleShortVersionString")
     assert_equal "$(CURRENT_PROJECT_VERSION)", info.fetch("CFBundleVersion")
     assert_equal false, info.fetch("ITSAppUsesNonExemptEncryption")
@@ -45,8 +52,13 @@ class ReleaseContractTest < Minitest::Test
     assert_equal ["NovaStationPinball"], app_target.fetch("sources").map { |source| source.fetch("path") }
     assert_equal ["NovaStationPinballTests"],
                  project.fetch("targets").fetch("NovaStationPinballTests").fetch("sources").map { |source| source.fetch("path") }
-    assert_equal ["NovaStationPinballUITests"],
+    # The `.storekit` entry is a resource of the UI test bundle: SKTestSession
+    # loads its catalogue from there, and the scheme's storeKitConfiguration
+    # only ever applies to the Run action.
+    assert_equal ["NovaStationPinballUITests", "NovaStationPinball/StoreKit/NovaStationPinball.storekit"],
                  project.fetch("targets").fetch("NovaStationPinballUITests").fetch("sources").map { |source| source.fetch("path") }
+    assert_equal "resources",
+                 project.fetch("targets").fetch("NovaStationPinballUITests").fetch("sources").last.fetch("buildPhase")
 
     package = File.read(File.join(ROOT, "Package.swift"), encoding: "UTF-8")
     assert_includes package, '.library(name: "NovaStationCore", targets: ["NovaStationCore"])'
@@ -65,10 +77,12 @@ class ReleaseContractTest < Minitest::Test
 
     release_config = JSON.parse(File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8"))
     assert_equal %w[en-US fr-FR], release_config.fetch("locales").sort
-    configured_products = release_config.fetch("tip_products")
+    refute release_config.key?("tip_products"), "the tip jar catalogue must be gone"
+    configured_products = release_config.fetch("iap_products")
     assert_equal configured_products.map { |product| product.fetch("product_id") }.sort,
                  release_config.fetch("iap").sort
     assert configured_products.all? { |product| product.fetch("type").match?(/\A[A-Z][A-Z0-9_]*\z/) }
+    assert_equal "one_time_unlock", release_config.fetch("monetization_strategy").fetch("model")
     assert_equal "https://bnjdpn.github.io/NovaStationPinball/#contact", release_config.fetch("support_url")
 
     fastfile = File.read(File.join(ROOT, "fastlane/Fastfile"), encoding: "UTF-8")
@@ -107,7 +121,7 @@ class ReleaseContractTest < Minitest::Test
     release_config = JSON.parse(
       File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8")
     )
-    configured_products = release_config.fetch("tip_products")
+    configured_products = release_config.fetch("iap_products")
     storekit = JSON.parse(
       File.read(File.join(ROOT, "NovaStationPinball/StoreKit/NovaStationPinball.storekit"), encoding: "UTF-8")
     )
@@ -125,12 +139,30 @@ class ReleaseContractTest < Minitest::Test
       [product.fetch("product_id"), type_map.fetch(product.fetch("type"))]
     end
     assert products.all? { |product| product.fetch("type") == configured_types.fetch(product.fetch("productID")) }
-    configured_tip_ids = configured_products.each_with_object([]) do |product, ids|
-      ids << product.fetch("product_id") if product.fetch("id", "").start_with?("tip.")
+    assert_empty storekit.fetch("subscriptionGroups")
+    assert_empty storekit.fetch("nonRenewingSubscriptions")
+
+    manifest = JSON.parse(File.read(File.join(ROOT, "fastlane/pro_products.json"), encoding: "UTF-8"))
+    assert_nil manifest.fetch("subscription_group")
+    assert_equal release_config.fetch("iap").sort,
+                 manifest.fetch("products").map { |product| product.fetch("product_id") }.sort
+    manifest.fetch("products").each do |product|
+      assert_equal "NON_CONSUMABLE", product.fetch("type")
+      assert_nil product.fetch("introductory_offer")
+      assert_equal %w[en-US fr-FR], product.fetch("localizations").keys.sort
+      product.fetch("localizations").each_value do |localization|
+        assert_operator localization.fetch("name").length, :<=, 30
+        assert_operator localization.fetch("description").length, :<=, 45
+      end
     end
-    assert products.select { |product| configured_tip_ids.include?(product.fetch("productID")) }
-                   .flat_map { |product| product.fetch("localizations") }
-                   .all? { |localization| localization.fetch("description").match?(/(?:Unlocks no features|ne débloque aucune fonctionnalité)/i) }
+    manifest_prices = manifest.fetch("products").to_h { |product| [product.fetch("product_id"), product.fetch("base_price")] }
+    assert products.all? { |product| product.fetch("displayPrice") == manifest_prices.fetch(product.fetch("productID")) }
+    assert_equal %w[
+      com.bnjdpn.NovaStationPinball.tip.cafe
+      com.bnjdpn.NovaStationPinball.tip.merci
+      com.bnjdpn.NovaStationPinball.tip.soutien
+    ], manifest.fetch("removed_from_sale").map { |product| product.fetch("product_id") }.sort
+    assert manifest.fetch("removed_from_sale").all? { |product| product.fetch("target_state") == "DEVELOPER_REMOVED_FROM_SALE" }
 
     project = YAML.safe_load(File.read(File.join(ROOT, "project.yml"), encoding: "UTF-8"), aliases: false)
     app_sources = project.fetch("targets").fetch("NovaStationPinball").fetch("sources")
@@ -138,7 +170,7 @@ class ReleaseContractTest < Minitest::Test
     assert_equal "NovaStationPinball/StoreKit/NovaStationPinball.storekit",
                  project.fetch("schemes").fetch("NovaStationPinball").fetch("run").fetch("storeKitConfiguration")
 
-    %w[AudioEngine.swift HapticsService.swift GameCenterClient.swift TipJarSupport.swift].each do |filename|
+    %w[AudioEngine.swift HapticsService.swift GameCenterClient.swift StoreService.swift].each do |filename|
       source = File.read(File.join(ROOT, "NovaStationPinball/Services", filename), encoding: "UTF-8")
       refute_match(/\b(?:URLSession|NWConnection)\b/, source)
     end
@@ -163,53 +195,195 @@ class ReleaseContractTest < Minitest::Test
     assert_match(/<key>com\.apple\.developer\.game-center<\/key>\s*<true\/>/, entitlements)
   end
 
-  def test_optional_tip_ui_is_reachable_storekit_driven_and_statically_owned
+  # The pipeline that submits the release must sell whatever the release
+  # configuration declares. Tour 2 shipped a non-consumable unlock behind a
+  # pipeline that still demanded three consumable tips: the contract said OK
+  # while submit_review and iap_status could only raise.
+  PIPELINE_FIXTURE_FILES = %w[
+    fastlane/release_config.json
+    fastlane/pro_products.json
+    fastlane/Fastfile
+    scripts/app_store/iap_status.rb
+    scripts/app_store/iap_sync.rb
+    scripts/app_store/review_submission.rb
+    scripts/app_store/status.rb
+  ].freeze
+
+  def test_the_release_pipeline_sells_the_configured_products_not_hard_coded_ones
+    release_config = JSON.parse(
+      File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8")
+    )
+    retired = release_config.fetch("retired_iap_products")
+    assert_equal %w[
+      com.bnjdpn.NovaStationPinball.tip.cafe
+      com.bnjdpn.NovaStationPinball.tip.merci
+      com.bnjdpn.NovaStationPinball.tip.soutien
+    ], retired.map { |product| product.fetch("product_id") }.sort
+    assert retired.all? { |product| product.fetch("target_state") == "DEVELOPER_REMOVED_FROM_SALE" }
+    assert_empty retired.map { |product| product.fetch("product_id") } &
+                 release_config.fetch("iap")
+
+    %w[
+      scripts/app_store/iap_status.rb
+      scripts/app_store/iap_sync.rb
+      scripts/app_store/review_submission.rb
+    ].each do |relative|
+      source = File.read(File.join(ROOT, relative), encoding: "UTF-8")
+      refute_match(/(?:NON_)?CONSUMABLE/, source, relative)
+      refute_match(/\btips?\b/i, source, relative)
+    end
+
+    fastfile = File.read(File.join(ROOT, "fastlane/Fastfile"), encoding: "UTF-8")
+    %w[submit_review iap_status iap_sync].each do |lane|
+      description = fastfile[/^\s*desc "([^"]*)"\n\s*lane :#{lane}\b/, 1].to_s
+      refute_empty description, lane
+      refute_match(/\btips?\b/i, description, lane)
+    end
+
+    with_pipeline_fixture do |root|
+      assert_empty pipeline_errors(root)
+    end
+
+    with_pipeline_fixture do |root|
+      path = File.join(root, "scripts/app_store/review_submission.rb")
+      File.write(path, File.read(path, encoding: "UTF-8").sub(
+        "REVIEWABLE_PRODUCT_STATES", "CONSUMABLE_ONLY_STATES"
+      ))
+      refute_empty pipeline_errors(root),
+                   "a pipeline that hard-codes a purchase type must fail the contract"
+    end
+
+    with_pipeline_fixture do |root|
+      path = File.join(root, "scripts/app_store/iap_status.rb")
+      File.write(path, File.read(path, encoding: "UTF-8").sub(
+        "sold products are missing", "optional tips are missing"
+      ))
+      refute_empty pipeline_errors(root),
+                   "a pipeline that still names the removed jar must fail the contract"
+    end
+
+    with_pipeline_fixture do |root|
+      path = File.join(root, "fastlane/Fastfile")
+      File.write(path, File.read(path, encoding: "UTF-8").sub(
+        /desc "[^"]*"\n(\s*lane :iap_status\b)/,
+        %Q{desc "Read and enforce exactly the three optional consumable tips"\n\\1}
+      ))
+      refute_empty pipeline_errors(root),
+                   "a lane description that still sells the removed jar must fail the contract"
+    end
+  end
+
+  def test_the_tip_jar_is_gone_from_the_binary_the_catalogue_and_the_copy
+    %w[
+      NovaStationPinball/Services/TipJarSupport.swift
+      NovaStationPinballTests/TipJarSupportTests.swift
+      NovaStationPinballUITests/TipJarReviewUITests.swift
+    ].each do |relative|
+      refute File.file?(File.join(ROOT, relative)), "#{relative} must be deleted"
+    end
+
+    shipped = Dir.glob(File.join(ROOT, "NovaStationPinball/**/*.swift")) +
+              Dir.glob(File.join(ROOT, "NovaStationCore/**/*.swift"))
+    shipped.each do |absolute|
+      contents = File.read(absolute, encoding: "UTF-8")
+      refute_match(/TipJar|tipJar|NOVA_TIP_JAR_FIXTURE/, contents, absolute)
+      refute_match(/pourboire/i, contents, absolute)
+    end
+
+    catalog = JSON.parse(
+      File.read(File.join(ROOT, "NovaStationPinball/Resources/Localizable.xcstrings"), encoding: "UTF-8")
+    ).fetch("strings")
+    assert catalog.keys.none? { |key| key.start_with?("tips.") }
+    catalog.each_value do |entry|
+      entry.fetch("localizations", {}).each_value do |localization|
+        value = localization.dig("stringUnit", "value").to_s
+        refute_match(/pourboire/i, value)
+        refute_match(/ne débloque aucune fonctionnalité|unlocks no features/i, value)
+      end
+    end
+
+    %w[en-US fr-FR].each do |locale|
+      %w[description.txt promotional_text.txt release_notes.txt].each do |filename|
+        value = File.read(File.join(ROOT, "fastlane/metadata", locale, filename), encoding: "UTF-8")
+        refute_match(/pourboire|tip[s]?\b/i, value, "#{locale}/#{filename}")
+      end
+    end
+  end
+
+  def test_workshop_paywall_is_storekit_driven_disclosed_and_statically_owned
     root_view = File.read(
       File.join(ROOT, "NovaStationPinball/App/RootView.swift"),
       encoding: "UTF-8"
     )
-    identifiers = %w[tipJarOpen tipJar tipJarClose tipJarStatus]
-    identifiers.each { |identifier| assert_includes root_view, %Q{"#{identifier}"} }
-    assert_includes root_view, '"tipJarPurchase.\(tip.definition.id)"'
-    assert_includes root_view, "model.availableTips()"
-    assert_match(/model\.purchaseTip\(\s*productIdentifier:/m, root_view)
-    assert_includes root_view, "tip.displayName"
-    assert_includes root_view, "tip.displayPrice"
+    %w[workshopOpen workshop workshopClose workshopUnlock workshopStatus
+       paywall paywallTitle paywallClose paywallPurchase paywallRestore
+       paywallTerms paywallTermsLink paywallPrivacyLink paywallStatus].each do |identifier|
+      assert_includes root_view, %Q{"#{identifier}"}
+    end
+    assert_includes root_view, '"workshopRewind.\(target.identifier)"'
+    assert_includes root_view, '"workshopDrill.\(drill.id)"'
+    assert_includes root_view, "offer.displayName"
+    assert_includes root_view, "offer.displayPrice"
+    assert_includes root_view, "WorkshopCatalog.termsOfUseURL"
+    assert_includes root_view, "WorkshopCatalog.privacyURL"
     refute_match(/(?:USD|EUR|\$\s*\d|\d+[.,]\d{2}\s*€)/, root_view)
+    assert_includes root_view, "paywall.loading"
+    assert_includes root_view, "paywall.unavailable"
+    assert_includes root_view, "workshop.message.no_keyframe"
+
+    store = File.read(
+      File.join(ROOT, "NovaStationPinball/Services/StoreService.swift"),
+      encoding: "UTF-8"
+    )
+    assert_includes store, "Transaction.currentEntitlements"
+    assert_includes store, "Transaction.updates"
+    assert_includes store, "AppStore.sync()"
+    assert_includes store, "displayName: product.displayName"
+    assert_includes store, "displayPrice: product.displayPrice"
+    assert_match(/#if DEBUG.*?NOVA_STORE_FIXTURE.*?#endif/m, store)
+    assert_match(/#if DEBUG.*?struct UITestingWorkshopStoreBackend.*?#endif/m, store)
+    assert_includes store, 'arguments.contains("-ui-testing")'
+    assert_includes store, 'environment["NOVA_STORE_FIXTURE"] == "available"'
+    assert_includes store, "return StoreKitWorkshopStoreBackend()"
+    assert_includes store, 'arguments.contains("-paywall-screenshot")'
+
+    # Grandfathering: the legacy signal is never a key this version writes.
+    usage_keys = store[/static let usageSignalKeys: \[String\] = \[(.*?)\]/m, 1].to_s
+    assert_includes usage_keys, "nova-station.high-scores"
+    assert_includes usage_keys, "nova-station.settings"
+    refute_includes usage_keys, "NovaStation.founder"
+    refute_match(/userDefaults\.set\(false, forKey: Keys\.founder\)|removeObject\(forKey: Keys\.founder\)/, store)
+
+    app_entry = File.read(
+      File.join(ROOT, "NovaStationPinball/App/NovaStationPinballApp.swift"),
+      encoding: "UTF-8"
+    )
+    assert_operator app_entry.index("LegacyEntitlement.migrateIfNeeded()"), :<,
+                    app_entry.index("State(initialValue: AppModel())")
+    refute_match(/@State\s+private\s+var\s+model\s*=\s*AppModel\(\)/, app_entry)
+
+    store_tests = File.read(
+      File.join(ROOT, "NovaStationPinballTests/StoreServiceTests.swift"),
+      encoding: "UTF-8"
+    )
+    %w[
+      testAFreshInstallIsNotAFounderAfterEveryServiceHasStarted
+      testAnInstallWithEarlierUsageDataIsAFounder
+      testMigrationIsIdempotent
+      testGrantedAccessIsNeverRevoked
+    ].each { |name| assert_includes store_tests, "func #{name}" }
 
     layout_test = File.read(
       File.join(ROOT, "NovaStationPinballUITests/LayoutUITests.swift"),
       encoding: "UTF-8"
     )
-    identifiers.each { |identifier| assert_includes layout_test, identifier }
-    JSON.parse(File.read(File.join(ROOT, "fastlane/release_config.json"), encoding: "UTF-8"))
-        .fetch("tip_products").map { |product| product.fetch("id") }.each do |tip_id|
-      assert_includes layout_test, %Q{"#{tip_id}"}
+    %w[workshopOpen workshopClose paywallPurchase paywallRestore].each do |identifier|
+      assert_includes layout_test, identifier
     end
-    assert_includes layout_test, 'app.buttons["tipJarPurchase.\(identifier)"]'
-    assert_includes layout_test, 'launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"'
+    assert_includes layout_test, 'launchEnvironment["NOVA_STORE_FIXTURE"] = "available"'
     assert_includes layout_test, "-ui-testing"
-
-    tip_support = File.read(
-      File.join(ROOT, "NovaStationPinball/Services/TipJarSupport.swift"),
-      encoding: "UTF-8"
-    )
-    app_model = File.read(
-      File.join(ROOT, "NovaStationPinball/App/AppModel.swift"),
-      encoding: "UTF-8"
-    )
-    assert_includes tip_support, "displayName: product.displayName"
-    assert_includes tip_support, "displayPrice: product.displayPrice"
-    assert_includes app_model, "TipJarSupportFactory.applicationDefault()"
-    assert_match(/#if DEBUG.*?NOVA_TIP_JAR_FIXTURE.*?#endif/m, tip_support)
-    assert_match(/#if DEBUG.*?actor UITestingTipJarSupport.*?#endif/m, tip_support)
-    assert_includes tip_support, 'arguments.contains("-ui-testing")'
-    assert_includes tip_support, 'environment["NOVA_TIP_JAR_FIXTURE"] == "available"'
-    assert_includes tip_support, "return StoreKitTipJarSupport()"
-    assert_includes tip_support, "Transaction.unfinished"
-    assert_includes tip_support, "Transaction.updates"
-    assert_includes tip_support, "knownProductIdentifiers.contains(transaction.productIdentifier)"
-    assert_includes tip_support, "await transaction.finish()"
+    assert_includes layout_test, 'app.otherElements["art.frame.4x3"].exists'
+    assert_includes layout_test, 'app.buttons["workshopClose"].frame.width'
 
     storekit = JSON.parse(
       File.read(
@@ -222,8 +396,8 @@ class ReleaseContractTest < Minitest::Test
       english_name = localizations.find { |entry| entry.fetch("locale") == "en_US" }.fetch("displayName")
       french_name = localizations.find { |entry| entry.fetch("locale") == "fr_FR" }.fetch("displayName")
       price = product.fetch("displayPrice")
-      assert_includes tip_support, %Q{displayName: french ? "#{french_name}" : "#{english_name}"}
-      assert_includes tip_support, %Q{displayPrice: french ? "#{price.tr(".", ",")} €" : "$#{price}"}
+      assert_includes store, %Q{displayName: french ? "#{french_name}" : "#{english_name}"}
+      assert_includes store, %Q{displayPrice: french ? "#{price.tr(".", ",")} €" : "$#{price}"}
     end
 
     screenshot_tests = File.read(
@@ -235,32 +409,46 @@ class ReleaseContractTest < Minitest::Test
       encoding: "UTF-8"
     )
     [screenshot_tests, preview_tests].each do |media_test|
-      assert_includes media_test, "tipJarOpen"
-      refute_includes media_test, "NOVA_TIP_JAR_FIXTURE"
+      assert_includes media_test, "workshopOpen"
+      refute_includes media_test, "NOVA_STORE_FIXTURE"
     end
+
     review_test = File.read(
-      File.join(ROOT, "NovaStationPinballUITests/TipJarReviewUITests.swift"),
+      File.join(ROOT, "NovaStationPinballUITests/PaywallReviewUITests.swift"),
       encoding: "UTF-8"
     )
     xcode_project = File.read(
       File.join(ROOT, "NovaStationPinball.xcodeproj/project.pbxproj"),
       encoding: "UTF-8"
     )
-    assert_includes review_test, 'launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"'
+    assert_includes review_test, '"-paywall-screenshot"'
     assert_includes review_test, "XCUIScreen.main.screenshot()"
     assert_includes review_test, "[2064, 2752]"
     assert_includes review_test, "screenshot.image.cgImage"
-    assert_includes review_test, "fixture DEBUG"
     refute_includes review_test, "purchaseButton.tap()"
-    assert_includes xcode_project, "TipJarReviewUITests.swift in Sources"
+    assert_includes xcode_project, "PaywallReviewUITests.swift in Sources"
+
+    # The capture prices the offer from the repository's own catalogue. A
+    # fixture with a hard-coded price cannot disagree with the spec, so it
+    # cannot detect that it disagrees; the live catalogue prices it from
+    # whatever App Store Connect happens to carry.
+    assert_includes review_test, "import StoreKitTest"
+    assert_includes review_test, 'SKTestSession(configurationFileNamed: "NovaStationPinball")'
+    assert_includes review_test, "session.storefront = Self.baseTerritory"
+    refute_includes review_test, "NOVA_STORE_FIXTURE"
+    assert_includes review_test, "paywallOfferLoading"
+    assert_includes review_test, "paywallOfferUnavailable"
+    assert_includes review_test, 'XCTAssertFalse(app.staticTexts["paywallStatus"].exists)'
+
+    assert File.file?(File.join(ROOT, "scripts/capture_paywall_review_screenshot.rb"))
+    assert_review_capture_asset_matches_the_products_manifest
+
     assert_match(
       /if activeOverlay == nil \{\s+Rectangle\(\)\.fill\(\.clear\).*?"art\.frame\.4x3".*?HStack\(spacing: 0\).*?"art\.table".*?"art\.console"/m,
       root_view
     )
-    assert_operator root_view.scan(".accessibilityAddTraits(.isModal)").length, :>=, 2
+    assert_operator root_view.scan(".accessibilityAddTraits(.isModal)").length, :>=, 3
     assert_includes root_view, ".frame(width: 44, height: 44)"
-    assert_includes layout_test, 'app.otherElements["art.frame.4x3"].exists'
-    assert_includes layout_test, 'app.buttons["tipJarClose"].frame.width'
 
     catalog = JSON.parse(
       File.read(
@@ -269,11 +457,106 @@ class ReleaseContractTest < Minitest::Test
       )
     ).fetch("strings")
     %w[
-      tips.body tips.close tips.loading tips.open tips.outcome.cancelled
-      tips.outcome.pending tips.outcome.purchased tips.outcome.unavailable
-      tips.outcome.unverified tips.purchase.hint tips.title tips.unavailable
+      paywall.title paywall.body paywall.one_time paywall.restore paywall.free_forever
+      paywall.link.terms paywall.link.privacy paywall.loading paywall.unavailable
+      workshop.title workshop.unlock workshop.rewind.remaining workshop.message.no_keyframe
     ].each do |key|
       assert_equal %w[en fr], catalog.fetch(key).fetch("localizations").keys.sort
+    end
+    disclosure = catalog.fetch("paywall.one_time").fetch("localizations")
+    assert_match(/one-time purchase/i, disclosure.dig("en", "stringUnit", "value"))
+    assert_match(/not a subscription/i, disclosure.dig("en", "stringUnit", "value"))
+    assert_match(/achat unique/i, disclosure.dig("fr", "stringUnit", "value"))
+    assert_match(/pas un abonnement/i, disclosure.dig("fr", "stringUnit", "value"))
+
+    drill_catalog = File.read(
+      File.join(ROOT, "NovaStationCore/Sources/NovaStationCore/ShotDrillCatalog.swift"),
+      encoding: "UTF-8"
+    )
+    drill_ids = drill_catalog[/public static let drills: \[ShotDrill\] = \[(.*?)\n    \]/m, 1]
+                  .to_s.scan(/drill\("([a-z0-9-]+)"/).flatten
+    assert_equal 14, drill_ids.length
+    drill_ids.each do |drill_id|
+      assert_equal %w[en fr], catalog.fetch("drill.#{drill_id}").fetch("localizations").keys.sort
+    end
+  end
+
+  # The Workshop sells a loop: an attempt that shows its own budget and
+  # verdict, a retry, and a way out — and copy that is grammatical at one.
+  def test_drill_attempt_loop_and_count_strings_are_contract_owned
+    root_view = File.read(
+      File.join(ROOT, "NovaStationPinball/App/RootView.swift"),
+      encoding: "UTF-8"
+    )
+    %w[workshopDrillHUD workshopDrillStatus workshopDrillRecord
+       workshopDrillRetry workshopDrillExit].each do |identifier|
+      assert_includes root_view, %Q{"#{identifier}"}
+    end
+    assert_includes root_view, "model.activeDrillOutcome"
+    assert_includes root_view, "model.activeDrillRemainingSeconds"
+    assert_includes root_view, "model.restartActiveDrill()"
+    assert_includes root_view, "model.endDrill()"
+
+    app_model = File.read(
+      File.join(ROOT, "NovaStationPinball/App/AppModel.swift"),
+      encoding: "UTF-8"
+    )
+    assert_includes app_model, "func restartActiveDrill()"
+    assert_includes app_model, "func endDrill()"
+    assert_includes app_model, "private(set) var activeDrillRemainingSeconds"
+
+    layout_test = File.read(
+      File.join(ROOT, "NovaStationPinballUITests/LayoutUITests.swift"),
+      encoding: "UTF-8"
+    )
+    %w[workshopDrillHUD workshopDrillStatus workshopDrillRetry workshopDrillExit].each do |identifier|
+      assert_includes layout_test, identifier
+    end
+    assert_includes layout_test, "exists == false"
+
+    audit_test = File.read(
+      File.join(ROOT, "NovaStationPinballUITests/AccessibilityAuditUITests.swift"),
+      encoding: "UTF-8"
+    )
+    assert_includes audit_test, "workshopDrillHUD"
+    assert_includes audit_test, "UICTContentSizeCategoryAccessibilityXXXL"
+
+    integration_test = File.read(
+      File.join(ROOT, "NovaStationPinballTests/AppModelRuntimeIntegrationTests.swift"),
+      encoding: "UTF-8"
+    )
+    assert_includes integration_test, "restartActiveDrill()"
+    assert_includes integration_test, "activeDrillRemainingSeconds"
+
+    catalog = JSON.parse(
+      File.read(
+        File.join(ROOT, "NovaStationPinball/Resources/Localizable.xcstrings"),
+        encoding: "UTF-8"
+      )
+    ).fetch("strings")
+    %w[drill.hud.title drill.hud.remaining drill.hud.succeeded drill.hud.failed
+       drill.hud.retry drill.hud.exit].each do |key|
+      assert_equal %w[en fr], catalog.fetch(key).fetch("localizations").keys.sort
+    end
+
+    {
+      "workshop.rewind.remaining" => 1,
+      "workshop.drills.record" => 2,
+      "drill.hud.remaining" => 1
+    }.each do |key, argument_number|
+      %w[en fr].each do |locale|
+        localization = catalog.fetch(key).fetch("localizations").fetch(locale)
+        substitution = localization
+                       .fetch("substitutions")
+                       .values
+                       .find { |value| value.fetch("argNum") == argument_number }
+        refute_nil substitution, "#{key} [#{locale}] must vary by plural on argument #{argument_number}"
+        plural = substitution.fetch("variations").fetch("plural")
+        one = plural.fetch("one").fetch("stringUnit").fetch("value")
+        other = plural.fetch("other").fetch("stringUnit").fetch("value")
+        refute_empty one
+        refute_equal one, other, "#{key} [#{locale}] must not repeat the singular as the plural"
+      end
     end
   end
 
@@ -499,6 +782,54 @@ class ReleaseContractTest < Minitest::Test
 
   private
 
+  def with_pipeline_fixture
+    Dir.mktmpdir("nova-pipeline-contract") do |root|
+      PIPELINE_FIXTURE_FILES.each do |relative|
+        destination = File.join(root, relative)
+        FileUtils.mkdir_p(File.dirname(destination))
+        FileUtils.cp(File.join(ROOT, relative), destination)
+      end
+      yield root
+    end
+  end
+
+  def pipeline_errors(root)
+    verifier = NovaStationPinballReleaseContract::Verifier.new(root)
+    verifier.send(:validate_release_pipeline_products)
+    verifier.instance_variable_get(:@errors)
+  end
+
+  # The capture is the only artefact of the release that states a price in
+  # pixels. Checking that the file exists is what let a sibling app ship a
+  # "$29.99" capture against a 6,99 € spec, so the sidecar written by the
+  # capture script is checked against the manifest and against the PNG itself.
+  def assert_review_capture_asset_matches_the_products_manifest
+    manifest = JSON.parse(
+      File.read(File.join(ROOT, "fastlane/pro_products.json"), encoding: "UTF-8")
+    )
+    product = manifest.fetch("products").first
+    declared = product.fetch("review_screenshot")
+    png = File.join(ROOT, declared)
+    assert File.file?(png), "missing review capture: #{declared}"
+    assert_equal "\x89PNG\r\n\x1a\n".b, File.binread(png, 8)
+
+    sidecar = png.sub(/\.png\z/, ".json")
+    assert File.file?(sidecar), "missing review capture sidecar: #{sidecar}"
+    payload = JSON.parse(File.read(sidecar, encoding: "UTF-8"))
+    assert_equal Digest::SHA256.hexdigest(File.binread(png)), payload.fetch("screenshot_sha256"),
+                 "the sidecar describes another image; recapture instead of editing it"
+    assert_equal product.fetch("product_id"), payload.fetch("product_id")
+    assert_equal manifest.fetch("base_territory"), payload.fetch("storefront")
+
+    displayed = payload.fetch("displayed_price")
+    digits = displayed[/\d+(?:[.,]\d{1,2})?/]
+    refute_nil digits, "cannot read a price out of #{displayed.inspect}"
+    assert_equal format("%.2f", Float(product.fetch("base_price"))),
+                 format("%.2f", Float(digits.tr(",", "."))),
+                 "the review capture states a price the App Store does not have: #{displayed.inspect}"
+    assert_includes displayed, "€", "the base currency is EUR: #{displayed.inspect}"
+  end
+
   def required_files
     %w[
       AGENTS.md .gitignore README.md project.yml Package.swift Gemfile
@@ -508,11 +839,13 @@ class ReleaseContractTest < Minitest::Test
       NovaStationPinball/App/MediaPreviewHandshake.swift
       NovaStationPinballTests/BootstrapTests.swift
       NovaStationPinballUITests/BootstrapUITests.swift
-      NovaStationPinballUITests/TipJarReviewUITests.swift
+      NovaStationPinballUITests/PaywallReviewUITests.swift
+      NovaStationPinball/Services/StoreService.swift
       NovaStationCore/Sources/NovaStationCore/NovaStationCore.swift
       NovaStationCore/Tests/NovaStationCoreTests/NovaStationCoreTests.swift
       scripts/release_contract.rb scripts/release_contract_test.rb
       fastlane/Fastfile fastlane/Appfile fastlane/release_config.json
+      fastlane/pro_products.json
       fastlane/media_adoption_contract.json
       fastlane/metadata_preflight.rb
       fastlane/metadata_pretransport_recovery.json

@@ -1,1 +1,1 @@
-flipper,arcade,table,bille,espace,bumper,multibille,physique,hors ligne
+arcade,bille,bumper,multibille,tilt,physique,hors ligne,billard,électrique,rembobinage,solo,score

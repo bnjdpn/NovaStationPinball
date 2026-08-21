@@ -25,8 +25,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.bnjdpn.NovaStationPinball
         PRODUCT_NAME: Nova Station Pinball
         PRODUCT_MODULE_NAME: NovaStationPinball
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.1"
+        CURRENT_PROJECT_VERSION: "2"
         SWIFT_VERSION: "6.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_ENTITLEMENTS: NovaStationPinball/NovaStationPinball.entitlements
@@ -67,6 +67,14 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: NovaStationPinballUITests
+      # The App Store Connect review capture drives StoreKit through
+      # SKTestSession, which loads its catalogue from the *test* bundle. The
+      # scheme's `run.storeKitConfiguration` only covers the Run action, so
+      # without this resource the capture would fall back to the live App Store
+      # catalogue and photograph whatever price App Store Connect happens to
+      # carry instead of the price this repository sells.
+      - path: NovaStationPinball/StoreKit/NovaStationPinball.storekit
+        buildPhase: resources
     dependencies:
       - target: NovaStationPinball
     settings:
@@ -74,6 +82,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.bnjdpn.NovaStationPinballUITests
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
+        FRAMEWORK_SEARCH_PATHS:
+          - $(inherited)
+          - $(SDKROOT)/Developer/Library/Frameworks
+          - $(PLATFORM_DIR)/Developer/Library/Frameworks
 schemes:
   NovaStationPinball:
     build:

@@ -18,13 +18,15 @@ final class StoreScreenshotUITests: XCTestCase {
 
         XCTAssertTrue(app.otherElements["art.frame.4x3"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.otherElements["media.scenario.\(scenario)"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["tipJarOpen"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["workshopOpen"].waitForExistence(timeout: 3))
         if opensTableGuide {
             let open = app.buttons["tableGuideOpen"]
             XCTAssertTrue(open.waitForExistence(timeout: 3))
             open.tap()
             XCTAssertTrue(app.otherElements["tableGuideStep.controls"].waitForExistence(timeout: 3))
-            app.buttons["tableGuideNext"].tap()
+            let forward = guideForwardControl(in: app)
+            XCTAssertTrue(forward.waitForExistence(timeout: 3))
+            forward.tap()
             XCTAssertTrue(app.otherElements["tableGuideStep.missions"].waitForExistence(timeout: 3))
             assertGuideCopyFitsAboveNavigation(in: app)
         }
@@ -37,7 +39,7 @@ final class StoreScreenshotUITests: XCTestCase {
     private func assertGuideCopyFitsAboveNavigation(in app: XCUIApplication) {
         let title = app.staticTexts["tableGuideStepTitle"]
         let body = app.staticTexts["tableGuideStepBody"]
-        let next = app.buttons["tableGuideNext"]
+        let next = guideForwardControl(in: app)
 
         XCTAssertTrue(title.waitForExistence(timeout: 3))
         XCTAssertTrue(body.waitForExistence(timeout: 3))
@@ -49,5 +51,14 @@ final class StoreScreenshotUITests: XCTestCase {
             next.frame.minY - 8,
             "The complete mission guide copy must remain above the fixed navigation controls."
         )
+    }
+
+    /// Last control of the guide navigation row. SwiftUI collapses the child
+    /// identifiers of the row into the row identifier on some runtimes, so the
+    /// named button is only a fast path, never the contract.
+    private func guideForwardControl(in app: XCUIApplication) -> XCUIElement {
+        let row = app.buttons.matching(identifier: "tableGuideNavigation")
+        if row.count > 0 { return row.element(boundBy: row.count - 1) }
+        return app.buttons["tableGuideNext"]
     }
 }

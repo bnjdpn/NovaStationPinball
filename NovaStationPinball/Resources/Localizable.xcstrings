@@ -79,48 +79,6 @@
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Flipper Nova Station" } }
       }
     },
-    "status.audio_interrupted" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "AUDIO INTERRUPTED" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "AUDIO INTERROMPU" } }
-      }
-    },
-    "status.ball_launched" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "BALL LAUNCHED" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "BILLE LANCÉE" } }
-      }
-    },
-    "status.gesture_cancelled" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "GESTURE CANCELLED" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "GESTE ANNULÉ" } }
-      }
-    },
-    "status.nudge" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "NUDGE" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "SECOUSSE" } }
-      }
-    },
-    "status.paused" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "PAUSED" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "EN PAUSE" } }
-      }
-    },
-    "status.plunger_charging" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "PLUNGER CHARGING" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "LANCEUR EN CHARGE" } }
-      }
-    },
-    "status.restored" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "CHECKPOINT RESTORED" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "PARTIE RESTAURÉE" } }
-      }
-    },
     "clearance.cargoKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Cargo Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé cargo" } } } },
     "clearance.commandKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Command Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé commandement" } } } },
     "clearance.dockKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Dock Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé d’amarrage" } } } },
@@ -130,6 +88,60 @@
     "clearance.relayKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Relay Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé relais" } } } },
     "clearance.shieldKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Shield Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé bouclier" } } } },
     "clearance.transitKey" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Transit Key" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé transit" } } } },
+    "drill.bonus-bank" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Bonus bank" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Banc de bonus" } } } },
+    "drill.bonus-multiplier" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Bonus multiplier" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Multiplicateur de bonus" } } } },
+    "drill.extra-ball" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Extra ball" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Bille supplémentaire" } } } },
+    "drill.hud.exit" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Leave the drill" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Quitter l’atelier" } } } },
+    "drill.hud.failed" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Attempt over — target missed." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tentative terminée — cible manquée." } } } },
+    "drill.hud.remaining" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : { "state" : "translated", "value" : "%#@seconds@" },
+          "substitutions" : {
+            "seconds" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : { "stringUnit" : { "state" : "translated", "value" : "%arg second left in this attempt" } },
+                  "other" : { "stringUnit" : { "state" : "translated", "value" : "%arg seconds left in this attempt" } }
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "%#@seconds@" },
+          "substitutions" : {
+            "seconds" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : { "stringUnit" : { "state" : "translated", "value" : "%arg seconde restante dans cette tentative" } },
+                  "other" : { "stringUnit" : { "state" : "translated", "value" : "%arg secondes restantes dans cette tentative" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "drill.hud.retry" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Serve again" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Recommencer" } } } },
+    "drill.hud.succeeded" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Target hit." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Cible atteinte." } } } },
+    "drill.hud.title" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Shot drill" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Atelier de tir" } } } },
+    "drill.multiball" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Multiball entry" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Entrée multibille" } } } },
+    "drill.portal" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Portal" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Portail" } } } },
+    "drill.ramp-left" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Left ramp" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rampe gauche" } } } },
+    "drill.ramp-right" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Right ramp" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rampe droite" } } } },
+    "drill.return-center" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Centre return lane" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Couloir de retour central" } } } },
+    "drill.return-left" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Left return lane" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Couloir de retour gauche" } } } },
+    "drill.return-right" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Right return lane" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Couloir de retour droit" } } } },
+    "drill.rollover-center" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Centre rollover" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rollover central" } } } },
+    "drill.score-multiplier" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Score multiplier" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Multiplicateur de score" } } } },
+    "drill.station-power" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Station power" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Énergie de station" } } } },
+    "drill.target-bank" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Target bank" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Banc de cibles" } } } },
     "guide.close" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Close" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fermer" } } } },
     "guide.controls.body" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "1 Left flipper\n2 Right flipper\n3 Pull and release the plunger. Swipe across the table to nudge." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "1 Flipper gauche\n2 Flipper droit\n3 Tirez puis relâchez le lanceur. Balayez le plateau pour le secouer." } } } },
     "guide.controls.title" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Control the ball" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Contrôler la bille" } } } },
@@ -171,29 +183,178 @@
     "mission.riftContainment" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Rift Containment" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Confinement de faille" } } } },
     "mission.stationTempest" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Station Tempest" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tempête de station" } } } },
     "mission.vaultSignal" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Vault Signal" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Signal du coffre" } } } },
+    "paywall.body" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "A one-time purchase that turns Nova Station into a practice table. The table itself, the 17 missions, multiball and the leaderboard stay free." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Un achat unique qui transforme Nova Station en table d’entraînement. La table, les 17 missions, le multibille et le classement restent gratuits." } } } },
+    "paywall.close" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Close" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fermer" } } } },
+    "paywall.feature.drills" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "14 shot drills, served from the same position" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "14 exercices de tir, servis depuis la même position" } } } },
+    "paywall.feature.review" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Replay the last five seconds, at 1× or 0.5×" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Revoir les cinq dernières secondes, en 1× ou 0,5×" } } } },
+    "paywall.feature.rewind" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Unlimited rewind: −3 s, −5 s or start of ball" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rembobinage illimité : −3 s, −5 s ou début de bille" } } } },
+    "paywall.feature.stats" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Success rate and best streak, kept on this device" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Taux de réussite et meilleure série, sur cet appareil" } } } },
+    "paywall.free_forever" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Free forever, purchase or not: the whole table, its 17 missions, the nine promotions, multiball, tilt and the leaderboard. No ads, no tracking, no account." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Gratuit à vie, avec ou sans achat : toute la table, ses 17 missions, les neuf promotions, le multibille, le tilt et le classement. Sans publicité, sans suivi, sans compte." } } } },
+    "paywall.link.privacy" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Privacy" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Confidentialité" } } } },
+    "paywall.link.terms" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Terms of use" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Conditions d’utilisation" } } } },
+    "paywall.loading" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading the offer…" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement de l’offre…" } } } },
+    "paywall.one_time" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "One-time purchase, not a subscription: nothing renews and there is nothing to cancel. Works offline, on this Apple Account, and can be restored on your other devices." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Achat unique, pas un abonnement : rien ne se renouvelle et il n’y a rien à résilier. Fonctionne hors ligne, sur ce compte Apple, et restaurable sur vos autres appareils." } } } },
+    "paywall.purchase.hint" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Buys the Workshop once, with no renewal" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Achète l’Atelier une seule fois, sans renouvellement" } } } },
+    "paywall.restore" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore purchase" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Restaurer l’achat" } } } },
+    "paywall.status.cancelled" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Purchase cancelled. Nothing was charged." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Achat annulé. Rien n’a été débité." } } } },
+    "paywall.status.nothing_to_restore" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No previous purchase found on this Apple Account." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun achat précédent trouvé sur ce compte Apple." } } } },
+    "paywall.status.owned" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The Workshop is unlocked on this device." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’Atelier est débloqué sur cet appareil." } } } },
+    "paywall.status.pending" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Purchase awaiting approval." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Achat en attente d’approbation." } } } },
+    "paywall.status.unavailable" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The purchase could not be completed." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’achat n’a pas pu aboutir." } } } },
+    "paywall.status.unverified" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "This purchase could not be verified by the App Store." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Cet achat n’a pas pu être vérifié par l’App Store." } } } },
+    "paywall.title" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The Workshop" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’Atelier" } } } },
+    "paywall.unavailable" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The App Store did not return the offer. Check your connection, then reopen the Workshop. If you already own it, restore your purchase." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’App Store n’a pas renvoyé l’offre. Vérifiez votre connexion puis rouvrez l’Atelier. Si vous l’avez déjà acheté, restaurez votre achat." } } } },
+    "status.audio_interrupted" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AUDIO INTERRUPTED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "AUDIO INTERROMPU" } }
+      }
+    },
+    "status.ball_launched" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "BALL LAUNCHED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "BILLE LANCÉE" } }
+      }
+    },
+    "status.drill" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "SHOT DRILL" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "ATELIER DE TIR" } } } },
     "status.game_over" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "GAME OVER" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "PARTIE TERMINÉE" } } } },
+    "status.gesture_cancelled" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "GESTURE CANCELLED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "GESTE ANNULÉ" } }
+      }
+    },
     "status.mission" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "MISSION ACTIVE" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "MISSION ACTIVE" } } } },
     "status.multiball" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "MULTIBALL" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "MULTIBILLE" } } } },
+    "status.nudge" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "NUDGE" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "SECOUSSE" } }
+      }
+    },
+    "status.paused" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PAUSED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "EN PAUSE" } }
+      }
+    },
+    "status.plunger_charging" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PLUNGER CHARGING" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "LANCEUR EN CHARGE" } }
+      }
+    },
     "status.promotion" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "CLEARANCE PROMOTED" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "HABILITATION PROMUE" } } } },
-    "status.tilt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TILT" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "TILT" } } } },
-    "tips.body" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Tips are optional and repeatable. They unlock no features or gameplay content." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Les pourboires sont facultatifs et répétables. Ils ne débloquent aucune fonctionnalité ni aucun contenu de jeu." } } } },
-    "tips.close" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Close tips" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fermer les pourboires" } } } },
-    "tips.loading" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading StoreKit offers…" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement des offres StoreKit…" } } } },
-    "tips.open" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Support" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Soutenir" } } } },
-    "tips.outcome.cancelled" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Purchase cancelled. Nothing changed." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Achat annulé. Rien n’a changé." } } } },
-    "tips.outcome.pending" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Purchase pending. No feature is locked while you wait." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Achat en attente. Aucune fonctionnalité n’est bloquée pendant ce temps." } } } },
-    "tips.outcome.purchased" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Thank you! This tip changes nothing in the game." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Merci ! Ce pourboire ne change rien au jeu." } } } },
-    "tips.outcome.unavailable" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The purchase is unavailable. Nothing changed." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’achat est indisponible. Rien n’a changé." } } } },
-    "tips.outcome.unverified" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The purchase could not be verified. Nothing changed." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’achat n’a pas pu être vérifié. Rien n’a changé." } } } },
-    "tips.purchase.hint" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Makes an optional, repeatable tip. Unlocks nothing." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Effectue un pourboire facultatif et répétable. Ne débloque rien." } } } },
-    "tips.title" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Optional tips" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Pourboires facultatifs" } } } },
-    "tips.unavailable" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "StoreKit offers are unavailable right now. The full game remains available." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Les offres StoreKit sont indisponibles pour le moment. Le jeu complet reste disponible." } } } },
+    "status.restored" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "CHECKPOINT RESTORED" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "PARTIE RESTAURÉE" } }
+      }
+    },
+    "status.reviewing" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "REPLAY" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "REVISIONNAGE" } } } },
+    "status.rewound" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "BALL REWOUND" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "BILLE REMBOBINÉE" } } } },
     "status.system_ready" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "SYSTEM READY" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "SYSTÈME PRÊT" } }
       }
-    }
+    },
+    "status.tilt" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "TILT" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "TILT" } } } },
+    "workshop.body.free" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Go back a few seconds, watch the ball again, then take over at the exact moment you choose. Three rewinds are included in every game, for good." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Revenez quelques secondes en arrière, revoyez la bille, puis reprenez la main à l’instant exact de votre choix. Trois rembobinages sont offerts à chaque partie, pour toujours." } } } },
+    "workshop.body.owned" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Rewind as often as you want, replay the last five seconds, and drill each shot until it goes in. A rewound game is ranked on the training board only." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rembobinez autant que vous voulez, revoyez les cinq dernières secondes et travaillez chaque tir jusqu’à le sortir. Une partie rembobinée est classée sur le tableau d’entraînement uniquement." } } } },
+    "workshop.close" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Close the Workshop" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fermer l’Atelier" } } } },
+    "workshop.drills.body" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Every attempt serves the ball from the exact same position. Reach the target within 20 seconds without tilting." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chaque tentative sert la bille depuis exactement la même position. Atteignez la cible en 20 secondes sans faire tilt." } } } },
+    "workshop.drills.record" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : { "state" : "translated", "value" : "%1$lld%% success · %#@attempts@ · best streak %3$lld" },
+          "substitutions" : {
+            "attempts" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : { "stringUnit" : { "state" : "translated", "value" : "%arg attempt" } },
+                  "other" : { "stringUnit" : { "state" : "translated", "value" : "%arg attempts" } }
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "%1$lld%% de réussite · %#@attempts@ · meilleure série %3$lld" },
+          "substitutions" : {
+            "attempts" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : { "stringUnit" : { "state" : "translated", "value" : "%arg tentative" } },
+                  "other" : { "stringUnit" : { "state" : "translated", "value" : "%arg tentatives" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "workshop.drills.title" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Shot drills" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Atelier de tir" } } } },
+    "workshop.drills.untried" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No attempt yet" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune tentative" } } } },
+    "workshop.founder" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Founder device: you played Nova Station before the Workshop existed, so this game gets ten free rewinds instead of three. The flag lives on this device only and is lost if you reinstall." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Appareil Fondateur : vous jouiez à Nova Station avant l’Atelier, donc cette partie compte dix rembobinages offerts au lieu de trois. Ce statut est enregistré sur cet appareil seulement et disparaît en cas de réinstallation." } } } },
+    "workshop.message.no_keyframe" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing has been recorded that far back yet. Play a few seconds and try again." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rien n’a encore été enregistré aussi loin. Jouez quelques secondes puis réessayez." } } } },
+    "workshop.open" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Workshop" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Atelier" } } } },
+    "workshop.resume" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Take over" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Reprendre ici" } } } },
+    "workshop.review.ball" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Replay this ball" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Revoir cette bille" } } } },
+    "workshop.review.five" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Replay the last 5 seconds" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Revoir les 5 dernières secondes" } } } },
+    "workshop.review.hint" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Replays your own inputs from that point. Take the table back whenever you want." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rejoue vos propres commandes depuis cet instant. Reprenez la table quand vous voulez." } } } },
+    "workshop.review.speed" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Replay speed" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Vitesse de lecture" } } } },
+    "workshop.review.speed.full" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Normal" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Normal" } } } },
+    "workshop.review.speed.half" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Slow motion" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ralenti" } } } },
+    "workshop.review.title" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Watch it again" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Revisionnage" } } } },
+    "workshop.rewind.ball_start" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Start of ball" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Début de bille" } } } },
+    "workshop.rewind.five" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "−5 s" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "−5 s" } } } },
+    "workshop.rewind.hint" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Puts the ball back where it was and hands the table straight back to you." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Repose la bille où elle était et vous rend la table immédiatement." } } } },
+    "workshop.rewind.remaining" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : { "state" : "translated", "value" : "%#@rewinds@ of %2$lld in this game." },
+          "substitutions" : {
+            "rewinds" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : { "stringUnit" : { "state" : "translated", "value" : "%arg free rewind left" } },
+                  "other" : { "stringUnit" : { "state" : "translated", "value" : "%arg free rewinds left" } }
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Il reste %#@rewinds@ sur %2$lld dans cette partie." },
+          "substitutions" : {
+            "rewinds" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : { "stringUnit" : { "state" : "translated", "value" : "%arg rembobinage offert" } },
+                  "other" : { "stringUnit" : { "state" : "translated", "value" : "%arg rembobinages offerts" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "workshop.rewind.three" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "−3 s" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "−3 s" } } } },
+    "workshop.rewind.title" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Rewind" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rembobinage" } } } },
+    "workshop.rewind.unlimited" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Unlimited rewinds. Rewound games stay off the ranked board." } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rembobinages illimités. Les parties rembobinées restent hors du classement." } } } },
+    "workshop.title" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Workshop" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Atelier" } } } },
+    "workshop.unlock" : { "extractionState" : "manual", "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Unlock the Workshop" } }, "fr" : { "stringUnit" : { "state" : "translated", "value" : "Débloquer l’Atelier" } } } }
   },
   "version" : "1.0"
 }

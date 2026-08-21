@@ -60,8 +60,8 @@ final class AppPreviewUITests: XCTestCase {
                 assertGuideCopyFitsAboveNavigation(in: app)
             } else {
                 XCTAssertTrue(
-                    app.buttons["tipJarOpen"].waitForExistence(timeout: 2),
-                    "Shipping tips access must remain visible in \(scenario) media"
+                    app.buttons["workshopOpen"].waitForExistence(timeout: 2),
+                    "Workshop access must remain visible in \(scenario) media"
                 )
             }
         }

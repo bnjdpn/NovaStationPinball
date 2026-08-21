@@ -7,11 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		094A1AD8B20013C3E33FCD4F /* StoreServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 151FAA22BEA71450E7EF7A0D /* StoreServiceTests.swift */; };
 		11B25E9FC4AF309F5679FE8C /* flipper-left.png in Resources */ = {isa = PBXBuildFile; fileRef = DE3EBE3908E13B9810421E2B /* flipper-left.png */; };
 		11E19D308C2B7F03D843E827 /* SimulationDriverSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0D1B9AD4DA7113B5E5E837 /* SimulationDriverSessionTests.swift */; };
 		17240EDEFA9E0ACDB00DFEA7 /* GameCenterClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E658836D313F7D96C196E5 /* GameCenterClientTests.swift */; };
 		192C20B4B1CB89036A6B82CD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2294AAD5AFB3C9369B881E5E /* Assets.xcassets */; };
 		1A0C1C81E8EABFC1EF4A4BFB /* lamp.png in Resources */ = {isa = PBXBuildFile; fileRef = 69ABD3A36422C88A502A8D77 /* lamp.png */; };
+		215E818B5DA667CB828DB443 /* WorkshopUITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FDAB78B55DA031383F8628A /* WorkshopUITestSupport.swift */; };
 		25BDEF381DD7F68EF673F6C9 /* BootstrapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442FB2F76F9D996CD373BC0 /* BootstrapTests.swift */; };
 		2895EFCD8A602345B06B112B /* greybox-table-guide.png in Resources */ = {isa = PBXBuildFile; fileRef = 28E92D8BDABA754F8484B6AC /* greybox-table-guide.png */; };
 		2EE19891FBB32B99F529DF81 /* PinballScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF4268188C1B58172F69BC1 /* PinballScene.swift */; };
@@ -21,13 +23,13 @@
 		3FDB1CCD33AA2F6026AFF9BE /* MediaPreviewHandshake.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61CB9F0534F76FA183A91B8C /* MediaPreviewHandshake.swift */; };
 		418BE9D995429BAB63E2BC21 /* AppModelTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F22D7364EE0D3A6834AD45E /* AppModelTestSupport.swift */; };
 		41BAE25103DD93EA0516C5FF /* crt-console.png in Resources */ = {isa = PBXBuildFile; fileRef = 5E857CFC79C0910D424D97F8 /* crt-console.png */; };
+		4DF971FAB6E597BCADF97245 /* NovaStationPinball.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 03285DB410BE046AE350779F /* NovaStationPinball.storekit */; };
 		4E866CB7C639EE70CCE8C588 /* StoreScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC13B05449114A9D99EB808F /* StoreScreenshotUITests.swift */; };
 		50078670D4A4AC6FE033E71A /* AudioEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8317AA570EF471601CEE2F06 /* AudioEngineTests.swift */; };
 		562A68C8FFF563E659EEFBDE /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43E08A6C5D95D31B79A4530F /* AppModel.swift */; };
 		584D7263D1873425F153D51C /* station-panels.png in Resources */ = {isa = PBXBuildFile; fileRef = 6E204A8E2983CB323B6A0424 /* station-panels.png */; };
 		5F6841084BABE5E9C405D969 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A7CFFD0F1E5FEBEEB2B6EE8D /* Localizable.xcstrings */; };
 		66C2144211140039C9D0D3F9 /* NovaStationPinballApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280CE621B703FB8A0210E09B /* NovaStationPinballApp.swift */; };
-		68C53E40EA1C3447985C674D /* TipJarReviewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E917908324348020F020D8F /* TipJarReviewUITests.swift */; };
 		69A99022E4B35A116E26BF0C /* SimulationDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C069B26C4A9DD9748895E2 /* SimulationDriver.swift */; };
 		6F8CE6ABD137080115B84206 /* LocalGameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C25B16B08029EA5ED715E397 /* LocalGameStore.swift */; };
 		70ADF6A3FE10DBDB6D40BACA /* MediaScenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BFE0A031DFC2910D2EA5E39 /* MediaScenario.swift */; };
@@ -49,10 +51,8 @@
 		A8DCEAC9607D5EB404B41AF9 /* AccessibilityAuditUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E25B12D0E266E08DE375BF /* AccessibilityAuditUITests.swift */; };
 		B6862F5C0B4B44B8B3AD3E73 /* LocalizationContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5108C48D3490F7FAF699878 /* LocalizationContractTests.swift */; };
 		B698973E561712C5172ABE20 /* AudioEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B11277AC4F0242A32085AF /* AudioEngine.swift */; };
-		B848833B9D35346FAD97F35B /* TipJarSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24C1FFB0BC19FC9037BE747 /* TipJarSupportTests.swift */; };
 		B86A7E9F93D32AF10BFFCE03 /* hud-overlay.png in Resources */ = {isa = PBXBuildFile; fileRef = AF976AD81D2CAABAAAB43FCA /* hud-overlay.png */; };
 		BCA5C0B2D180CB551C263B7E /* ball.png in Resources */ = {isa = PBXBuildFile; fileRef = 7BE87560EFEE49EF506E3A99 /* ball.png */; };
-		BD11B45490094D9C50C5E670 /* TipJarSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82DAA25FE1AB5B5FC8A76BC4 /* TipJarSupport.swift */; };
 		BF8BA0FE210E3FD1328367DF /* TouchInterpreterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEDA9882D6B5417CC9B8F69 /* TouchInterpreterTests.swift */; };
 		C69CBD3F6C50AA90FAA27EDC /* flipper-right.png in Resources */ = {isa = PBXBuildFile; fileRef = 5177B326EFF27C1AB6194E36 /* flipper-right.png */; };
 		C7B2A99B1E8D7D2A96457709 /* portal.png in Resources */ = {isa = PBXBuildFile; fileRef = 18266617BB98E28892A3710D /* portal.png */; };
@@ -62,6 +62,8 @@
 		DC72561400826179CD8EE252 /* GameCenterClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF63D15F0BC4B8A1904E335 /* GameCenterClient.swift */; };
 		E81ED63B235A1302CE1706FD /* menu-background.png in Resources */ = {isa = PBXBuildFile; fileRef = 8365AE9D439BF33503076AAB /* menu-background.png */; };
 		EAEAFFD3734EB4ED2EB38FDC /* store-creative.png in Resources */ = {isa = PBXBuildFile; fileRef = 9A4AFE631CA9CC437B968FBC /* store-creative.png */; };
+		ED69071BEE1A9F857BAA0EDB /* PaywallReviewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5071501073204AF1F26E1FEB /* PaywallReviewUITests.swift */; };
+		EF0C92E4AD031F5C5BDCC544 /* StoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD7E51AD0499573F8D913269 /* StoreService.swift */; };
 		F2C933BB1E7B1DCCD194345E /* LifecycleCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCAD3D2CB6169AE237367703 /* LifecycleCoordinatorTests.swift */; };
 		FA71C8ACD7FEEB7756AA20D9 /* GameCompletionGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789426F1CDFEB296185BDDA /* GameCompletionGate.swift */; };
 		FAC4821AFA0D4BC8B0C1308A /* HapticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1761468CEB9766517719997 /* HapticsService.swift */; };
@@ -86,8 +88,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		03285DB410BE046AE350779F /* NovaStationPinball.storekit */ = {isa = PBXFileReference; path = NovaStationPinball.storekit; sourceTree = "<group>"; };
 		075346F0E76287DDE6B6DBBC /* AppPreviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreviewUITests.swift; sourceTree = "<group>"; };
 		0CF4268188C1B58172F69BC1 /* PinballScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinballScene.swift; sourceTree = "<group>"; };
+		151FAA22BEA71450E7EF7A0D /* StoreServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreServiceTests.swift; sourceTree = "<group>"; };
 		18266617BB98E28892A3710D /* portal.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = portal.png; sourceTree = "<group>"; };
 		1B96A6A64D9702EB3D8D7C2C /* ramp.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ramp.png; sourceTree = "<group>"; };
 		2294AAD5AFB3C9369B881E5E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -95,10 +99,12 @@
 		280CE621B703FB8A0210E09B /* NovaStationPinballApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovaStationPinballApp.swift; sourceTree = "<group>"; };
 		28E92D8BDABA754F8484B6AC /* greybox-table-guide.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "greybox-table-guide.png"; sourceTree = "<group>"; };
 		2F22D7364EE0D3A6834AD45E /* AppModelTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTestSupport.swift; sourceTree = "<group>"; };
+		2FDAB78B55DA031383F8628A /* WorkshopUITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkshopUITestSupport.swift; sourceTree = "<group>"; };
 		3DF63D15F0BC4B8A1904E335 /* GameCenterClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterClient.swift; sourceTree = "<group>"; };
 		43E08A6C5D95D31B79A4530F /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		4CF8DF8F5F8C4FE1C4EA6A7D /* AppModelRuntimeIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelRuntimeIntegrationTests.swift; sourceTree = "<group>"; };
 		4F6C85644CC684CF1DAFE95D /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		5071501073204AF1F26E1FEB /* PaywallReviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallReviewUITests.swift; sourceTree = "<group>"; };
 		5177B326EFF27C1AB6194E36 /* flipper-right.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "flipper-right.png"; sourceTree = "<group>"; };
 		5BFE0A031DFC2910D2EA5E39 /* MediaScenario.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaScenario.swift; sourceTree = "<group>"; };
 		5E857CFC79C0910D424D97F8 /* crt-console.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "crt-console.png"; sourceTree = "<group>"; };
@@ -116,8 +122,6 @@
 		7902327A808B6D80B5A225FB /* plunger.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = plunger.png; sourceTree = "<group>"; };
 		7A9B772B5B8936C992AFB07A /* bumper.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = bumper.png; sourceTree = "<group>"; };
 		7BE87560EFEE49EF506E3A99 /* ball.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ball.png; sourceTree = "<group>"; };
-		7E917908324348020F020D8F /* TipJarReviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarReviewUITests.swift; sourceTree = "<group>"; };
-		82DAA25FE1AB5B5FC8A76BC4 /* TipJarSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarSupport.swift; sourceTree = "<group>"; };
 		8317AA570EF471601CEE2F06 /* AudioEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineTests.swift; sourceTree = "<group>"; };
 		8365AE9D439BF33503076AAB /* menu-background.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "menu-background.png"; sourceTree = "<group>"; };
 		91E658836D313F7D96C196E5 /* GameCenterClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterClientTests.swift; sourceTree = "<group>"; };
@@ -130,7 +134,6 @@
 		AC13B05449114A9D99EB808F /* StoreScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreScreenshotUITests.swift; sourceTree = "<group>"; };
 		AF976AD81D2CAABAAAB43FCA /* hud-overlay.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "hud-overlay.png"; sourceTree = "<group>"; };
 		B0FF8599CF2CA8886C0756C1 /* BootstrapUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapUITests.swift; sourceTree = "<group>"; };
-		B24C1FFB0BC19FC9037BE747 /* TipJarSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarSupportTests.swift; sourceTree = "<group>"; };
 		B442FB2F76F9D996CD373BC0 /* BootstrapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapTests.swift; sourceTree = "<group>"; };
 		B74A6954C67D4D266A0D582A /* OptionalEffectsLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionalEffectsLifecycleTests.swift; sourceTree = "<group>"; };
 		C0C069B26C4A9DD9748895E2 /* SimulationDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulationDriver.swift; sourceTree = "<group>"; };
@@ -141,6 +144,7 @@
 		D93E43D4C27A4D6338571F12 /* RasterHUDRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RasterHUDRenderer.swift; sourceTree = "<group>"; };
 		DC587FBBD8BF4ACBD727EACB /* LayoutUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutUITests.swift; sourceTree = "<group>"; };
 		DCEDA9882D6B5417CC9B8F69 /* TouchInterpreterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchInterpreterTests.swift; sourceTree = "<group>"; };
+		DD7E51AD0499573F8D913269 /* StoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreService.swift; sourceTree = "<group>"; };
 		DE3EBE3908E13B9810421E2B /* flipper-left.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "flipper-left.png"; sourceTree = "<group>"; };
 		E5108C48D3490F7FAF699878 /* LocalizationContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationContractTests.swift; sourceTree = "<group>"; };
 		EA43F12DEE926F61EDAF38F1 /* key-art.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "key-art.png"; sourceTree = "<group>"; };
@@ -195,6 +199,15 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		40AF554E88758687B6F7E835 /* StoreKit */ = {
+			isa = PBXGroup;
+			children = (
+				03285DB410BE046AE350779F /* NovaStationPinball.storekit */,
+			);
+			name = StoreKit;
+			path = NovaStationPinball/StoreKit;
+			sourceTree = "<group>";
+		};
 		5305FCE9EF89E3D70779D15A = {
 			isa = PBXGroup;
 			children = (
@@ -202,6 +215,7 @@
 				AC07D4A45EFF78F8A77BDC0C /* NovaStationPinballTests */,
 				88D532878B5F7FE26559447D /* NovaStationPinballUITests */,
 				B045788CD579132F94F0D8D6 /* Packages */,
+				40AF554E88758687B6F7E835 /* StoreKit */,
 				B8ED9F29879FBA7FA2686BAA /* Products */,
 			);
 			sourceTree = "<group>";
@@ -237,8 +251,9 @@
 				075346F0E76287DDE6B6DBBC /* AppPreviewUITests.swift */,
 				B0FF8599CF2CA8886C0756C1 /* BootstrapUITests.swift */,
 				DC587FBBD8BF4ACBD727EACB /* LayoutUITests.swift */,
+				5071501073204AF1F26E1FEB /* PaywallReviewUITests.swift */,
 				AC13B05449114A9D99EB808F /* StoreScreenshotUITests.swift */,
-				7E917908324348020F020D8F /* TipJarReviewUITests.swift */,
+				2FDAB78B55DA031383F8628A /* WorkshopUITestSupport.swift */,
 			);
 			path = NovaStationPinballUITests;
 			sourceTree = "<group>";
@@ -259,7 +274,7 @@
 				B74A6954C67D4D266A0D582A /* OptionalEffectsLifecycleTests.swift */,
 				CA0D1B9AD4DA7113B5E5E837 /* SimulationDriverSessionTests.swift */,
 				F36F118533D8F64C95D0C105 /* SimulationDriverTests.swift */,
-				B24C1FFB0BC19FC9037BE747 /* TipJarSupportTests.swift */,
+				151FAA22BEA71450E7EF7A0D /* StoreServiceTests.swift */,
 				DCEDA9882D6B5417CC9B8F69 /* TouchInterpreterTests.swift */,
 			);
 			path = NovaStationPinballTests;
@@ -315,7 +330,7 @@
 				A1761468CEB9766517719997 /* HapticsService.swift */,
 				A49E22B8EBCB3D3931822D35 /* LifecycleCoordinator.swift */,
 				C25B16B08029EA5ED715E397 /* LocalGameStore.swift */,
-				82DAA25FE1AB5B5FC8A76BC4 /* TipJarSupport.swift */,
+				DD7E51AD0499573F8D913269 /* StoreService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -348,6 +363,7 @@
 			buildConfigurationList = 727CE650DBCD5B806C5D8B79 /* Build configuration list for PBXNativeTarget "NovaStationPinballUITests" */;
 			buildPhases = (
 				EC9027F53A9748F3EA6F6C6D /* Sources */,
+				04D825A5243872E436740D23 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -421,6 +437,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		04D825A5243872E436740D23 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4DF971FAB6E597BCADF97245 /* NovaStationPinball.storekit in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D10CF68F6113693EFB742641 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -469,7 +493,7 @@
 				81CE10C859E74D8108B31268 /* RasterHUDRenderer.swift in Sources */,
 				883070190276EAA049E974E4 /* RootView.swift in Sources */,
 				69A99022E4B35A116E26BF0C /* SimulationDriver.swift in Sources */,
-				BD11B45490094D9C50C5E670 /* TipJarSupport.swift in Sources */,
+				EF0C92E4AD031F5C5BDCC544 /* StoreService.swift in Sources */,
 				92058DAC30C8FAA0057363C8 /* TouchInterpreter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -491,7 +515,7 @@
 				C9CE19549B6FEF2875C75C30 /* OptionalEffectsLifecycleTests.swift in Sources */,
 				11E19D308C2B7F03D843E827 /* SimulationDriverSessionTests.swift in Sources */,
 				8A0CFFDB6BD23D18ABA34C4C /* SimulationDriverTests.swift in Sources */,
-				B848833B9D35346FAD97F35B /* TipJarSupportTests.swift in Sources */,
+				094A1AD8B20013C3E33FCD4F /* StoreServiceTests.swift in Sources */,
 				BF8BA0FE210E3FD1328367DF /* TouchInterpreterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -504,8 +528,9 @@
 				9F610CEC5FFD023359AF8823 /* AppPreviewUITests.swift in Sources */,
 				94099F1201292BAEA7B78F11 /* BootstrapUITests.swift in Sources */,
 				FE39272A94770A1E3A8F85BB /* LayoutUITests.swift in Sources */,
+				ED69071BEE1A9F857BAA0EDB /* PaywallReviewUITests.swift in Sources */,
 				4E866CB7C639EE70CCE8C588 /* StoreScreenshotUITests.swift in Sources */,
-				68C53E40EA1C3447985C674D /* TipJarReviewUITests.swift in Sources */,
+				215E818B5DA667CB828DB443 /* WorkshopUITestSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -531,14 +556,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = NovaStationPinball/NovaStationPinball.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_FILE = NovaStationPinball/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bnjdpn.NovaStationPinball;
 				PRODUCT_MODULE_NAME = NovaStationPinball;
 				PRODUCT_NAME = "Nova Station Pinball";
@@ -571,6 +596,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SDKROOT)/Developer/Library/Frameworks",
+					"$(PLATFORM_DIR)/Developer/Library/Frameworks",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -592,14 +622,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = NovaStationPinball/NovaStationPinball.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_FILE = NovaStationPinball/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bnjdpn.NovaStationPinball;
 				PRODUCT_MODULE_NAME = NovaStationPinball;
 				PRODUCT_NAME = "Nova Station Pinball";
@@ -613,6 +643,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SDKROOT)/Developer/Library/Frameworks",
+					"$(PLATFORM_DIR)/Developer/Library/Frameworks",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (

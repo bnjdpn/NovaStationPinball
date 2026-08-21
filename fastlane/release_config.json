@@ -2,7 +2,7 @@
   "app_name": "Nova Station Pinball",
   "app_slug": "NovaStationPinball",
   "app_store_name": "Nova Station Pinball",
-  "version": "1.0",
+  "version": "1.1",
   "project": "NovaStationPinball.xcodeproj",
   "scheme": "NovaStationPinball",
   "team_id": "767SX34A7Z",
@@ -11,7 +11,10 @@
   "artifact_root": "Builds/AppStore/NovaStationPinball",
   "scratch_root": "/private/tmp/apps-factory/NovaStationPinball",
   "bundle_id": "com.bnjdpn.NovaStationPinball",
-  "locales": ["en-US", "fr-FR"],
+  "locales": [
+    "en-US",
+    "fr-FR"
+  ],
   "support_url": "https://bnjdpn.github.io/NovaStationPinball/#contact",
   "privacy_url": "https://bnjdpn.github.io/NovaStationPinball/privacy.html",
   "price": "0.00",
@@ -24,28 +27,96 @@
   "age_rating": "fastlane/metadata/app_rating_config.json",
   "content_rights_declaration": "DOES_NOT_USE_THIRD_PARTY_CONTENT",
   "iap": [
-    "com.bnjdpn.NovaStationPinball.tip.cafe",
-    "com.bnjdpn.NovaStationPinball.tip.merci",
-    "com.bnjdpn.NovaStationPinball.tip.soutien"
+    "com.bnjdpn.NovaStationPinball.workshop"
   ],
-  "tip_products": [
-    { "id": "tip.cafe", "product_id": "com.bnjdpn.NovaStationPinball.tip.cafe", "type": "CONSUMABLE" },
-    { "id": "tip.merci", "product_id": "com.bnjdpn.NovaStationPinball.tip.merci", "type": "CONSUMABLE" },
-    { "id": "tip.soutien", "product_id": "com.bnjdpn.NovaStationPinball.tip.soutien", "type": "CONSUMABLE" }
+  "iap_products": [
+    {
+      "id": "workshop",
+      "product_id": "com.bnjdpn.NovaStationPinball.workshop",
+      "type": "NON_CONSUMABLE"
+    }
   ],
+  "retired_iap_products": [
+    {
+      "product_id": "com.bnjdpn.NovaStationPinball.tip.cafe",
+      "type": "CONSUMABLE",
+      "target_state": "DEVELOPER_REMOVED_FROM_SALE",
+      "retired_in": "1.1"
+    },
+    {
+      "product_id": "com.bnjdpn.NovaStationPinball.tip.merci",
+      "type": "CONSUMABLE",
+      "target_state": "DEVELOPER_REMOVED_FROM_SALE",
+      "retired_in": "1.1"
+    },
+    {
+      "product_id": "com.bnjdpn.NovaStationPinball.tip.soutien",
+      "type": "CONSUMABLE",
+      "target_state": "DEVELOPER_REMOVED_FROM_SALE",
+      "retired_in": "1.1"
+    }
+  ],
+  "monetization_strategy": {
+    "model": "one_time_unlock",
+    "decided_on": "2026-08-19",
+    "product_id": "com.bnjdpn.NovaStationPinball.workshop",
+    "base_price": "4.99",
+    "base_currency": "EUR",
+    "base_territory": "FRA",
+    "products_manifest": "fastlane/pro_products.json",
+    "rationale": "Episodic arcade play with no recurring delivered value: a one-time unlock, never a subscription. Priced level with VesperDrift because both are offline single-player arcade games from the same studio.",
+    "free_forever": [
+      "complete table",
+      "17 missions",
+      "9 clearance promotions",
+      "multiball, tilt and nudge",
+      "interactive table guide",
+      "local high scores",
+      "optional Game Center leaderboard",
+      "3 rewinds per game (10 for founder devices)",
+      "replay of the ball in play, at 1x or 0.5x"
+    ],
+    "unlocks": [
+      "unlimited rewind (-3 s, -5 s, start of ball) with resume in hand",
+      "replay from five seconds back at 1x or 0.5x",
+      "14 shot drills served from an identical state, with success rate and best streak"
+    ],
+    "tips_removed_on": "2026-08-19",
+    "tips_asc_action": "com.bnjdpn.NovaStationPinball.tip.cafe, .tip.merci and .tip.soutien must be set to DEVELOPER_REMOVED_FROM_SALE in App Store Connect",
+    "leaderboard_integrity": "runs that used the Workshop are ranked on a separate local training board and are never submitted to Game Center",
+    "grandfathering": "device-local founder flag detected once, before any write of the new build, from the 1.0 usage signals; it grants 10 free rewinds per game and is never revoked"
+  },
   "app_preview_policy": {
     "applicable": true,
     "review_each_release": true,
     "generator": "scripts/app_store/generate_app_previews.rb",
     "parallel_locales": 2,
-    "scenarios": ["launch", "mission", "promotion", "multiball", "tilt", "game-over"]
+    "scenarios": [
+      "launch",
+      "mission",
+      "promotion",
+      "multiball",
+      "tilt",
+      "game-over"
+    ]
   },
   "media_contract": {
     "generator": "scripts/app_store/generate_screenshots.rb",
     "validator": "scripts/app_store/media_contract.rb",
     "parallel_locales": 2,
-    "devices": ["iphone-17-pro-max", "iphone-se-3", "ipad-pro-13-m5"],
-    "scenarios": ["launch", "mission", "promotion", "multiball", "tilt", "game-over"]
+    "devices": [
+      "iphone-17-pro-max",
+      "iphone-se-3",
+      "ipad-pro-13-m5"
+    ],
+    "scenarios": [
+      "launch",
+      "mission",
+      "promotion",
+      "multiball",
+      "tilt",
+      "game-over"
+    ]
   },
   "release_pipeline": {
     "schema_version": 1,
@@ -54,8 +125,13 @@
     "media_expectations": "fastlane/media_expectations.json",
     "select_build_script": "scripts/app_store/select_build.rb",
     "metadata_readback_contract": "deliver-v1",
-    "metadata_locales": ["en-US", "fr-FR"],
-    "metadata_review_information_fields": ["notes"],
+    "metadata_locales": [
+      "en-US",
+      "fr-FR"
+    ],
+    "metadata_review_information_fields": [
+      "notes"
+    ],
     "metadata_expected_omissions": [
       {
         "path": "version_localizations.*.whatsNew",

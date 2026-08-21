@@ -199,7 +199,9 @@ public struct CheckpointEnvelope: Sendable, Codable, Equatable {
     }
 }
 
-private enum PersistenceVersion {
+/// Shared strict format-version gate. Every persisted Nova type validates
+/// its own version through this exact-equality check.
+enum PersistenceVersion {
     static func validate(_ actual: Int, expected: Int, codingPath: [CodingKey]) throws {
         guard actual == expected else {
             throw DecodingError.dataCorrupted(

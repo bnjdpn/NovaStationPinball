@@ -325,7 +325,11 @@ module NovaStationPinballAscStatus
     }
   end
 
-  def iap(client, app_id, expected_ids)
+  # Retired product ids are declared by the release configuration: products a
+  # previous version sold and this one no longer does. They still exist in App
+  # Store Connect, so they are reported on their own line instead of polluting
+  # the unexpected list.
+  def iap(client, app_id, expected_ids, retired_ids = [])
     items = client.get_all("/v1/apps/#{app_id}/inAppPurchasesV2", {
       "fields[inAppPurchases]" =>
         "name,productId,inAppPurchaseType,state,reviewNote",
@@ -336,7 +340,8 @@ module NovaStationPinballAscStatus
       "expected_count" => expected_ids.length,
       "actual_count" => items.length,
       "missing_product_ids" => (expected_ids - actual_ids).sort,
-      "unexpected_product_ids" => (actual_ids - expected_ids).sort,
+      "unexpected_product_ids" => (actual_ids - expected_ids - retired_ids).sort,
+      "retired_product_ids" => (actual_ids & retired_ids).sort,
       "items" => items
     }
   end
@@ -409,7 +414,10 @@ module NovaStationPinballAscStatus
         client, version, config.dig("release_pipeline", "metadata_locales")
       ),
       "pricing" => pricing(client, app.fetch("id"), config),
-      "iap" => iap(client, app.fetch("id"), config.fetch("iap")),
+      "iap" => iap(
+        client, app.fetch("id"), config.fetch("iap"),
+        config.fetch("retired_iap_products", []).map { |product| product.fetch("product_id") }
+      ),
       "metadata" => if version && info
                       NovaStationPinballMetadataReadback.proof(
                         client: client, version: version, app_info: info,

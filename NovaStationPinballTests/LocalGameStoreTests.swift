@@ -89,19 +89,97 @@ final class LocalGameStoreTests: XCTestCase {
         XCTAssertEqual(results.filter { $0 == nil }.count, 1)
     }
 
-    func testCorruptCheckpointIsDiscardedWithoutChangingHighScores() throws {
+    /// A saved game that cannot be decoded is quarantined, not destroyed: the
+    /// bytes stay on disk under `.bak` so the failure leaves a trace.
+    func testCorruptCheckpointIsQuarantinedInsteadOfDeleted() throws {
         let store = LocalGameStore(defaults: defaults, directory: directory)
         let scores = [score(identifier: "safe", name: "SAFE", score: 80_000, seconds: 1)]
         try store.saveHighScores(scores)
-        try Data("not valid checkpoint JSON".utf8).write(
-            to: directory.appendingPathComponent("active-checkpoint.json"),
-            options: .atomic
-        )
+        let live = directory.appendingPathComponent("active-checkpoint.json")
+        let quarantined = directory.appendingPathComponent("active-checkpoint.bak")
+        try Data("not valid checkpoint JSON".utf8).write(to: live, options: .atomic)
 
         XCTAssertNil(try store.restoreCheckpointOnce())
 
         XCTAssertEqual(try store.loadHighScores(), scores)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("active-checkpoint.json").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: live.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: quarantined.path))
+        XCTAssertEqual(
+            try Data(contentsOf: quarantined),
+            Data("not valid checkpoint JSON".utf8)
+        )
+    }
+
+    func testASecondCorruptCheckpointReplacesTheSingleQuarantineCopy() throws {
+        let store = LocalGameStore(defaults: defaults, directory: directory)
+        let live = directory.appendingPathComponent("active-checkpoint.json")
+        let quarantined = directory.appendingPathComponent("active-checkpoint.bak")
+
+        try Data("first".utf8).write(to: live, options: .atomic)
+        XCTAssertNil(try store.restoreCheckpointOnce())
+        try Data("second".utf8).write(to: live, options: .atomic)
+        XCTAssertNil(try store.restoreCheckpointOnce())
+
+        XCTAssertEqual(try Data(contentsOf: quarantined), Data("second".utf8))
+    }
+
+    func testAValidCheckpointIsConsumedAndLeavesNoQuarantineCopy() throws {
+        let store = LocalGameStore(defaults: defaults, directory: directory)
+        let checkpoint = makeCheckpoint(identifier: "clean-restore")
+        try store.saveCheckpoint(checkpoint)
+
+        XCTAssertEqual(try store.restoreCheckpointOnce(), checkpoint)
+
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("active-checkpoint.json").path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("active-checkpoint.bak").path
+        ))
+    }
+
+    /// The Workshop stores are new keys. The ranked ladder never mixes with
+    /// the assisted one, and neither migrates.
+    func testTrainingScoresAreStoredApartFromTheRankedHighScores() throws {
+        let store = LocalGameStore(defaults: defaults, directory: directory)
+        let ranked = [score(identifier: "ranked", name: "NOVA", score: 90_000, seconds: 1)]
+        let training = [score(identifier: "training", name: "NOVA", score: 900_000, seconds: 2)]
+
+        try store.saveHighScores(ranked)
+        try store.saveTrainingScores(training)
+
+        XCTAssertEqual(try store.loadHighScores(), ranked)
+        XCTAssertEqual(try store.loadTrainingScores(), training)
+        XCTAssertNotNil(defaults.data(forKey: "nova-station.training-scores"))
+    }
+
+    func testDrillProgressRoundTripsUnderItsOwnKeyAndDefaultsToEmpty() throws {
+        let store = LocalGameStore(defaults: defaults, directory: directory)
+
+        XCTAssertEqual(try store.loadDrillProgress(), DrillProgress())
+
+        var progress = DrillProgress()
+        progress.record(drillID: "ramp-left", succeeded: true)
+        try store.saveDrillProgress(progress)
+
+        XCTAssertEqual(try store.loadDrillProgress(), progress)
+        XCTAssertNotNil(defaults.data(forKey: "nova-station.drill-progress"))
+    }
+
+    func testTheAssistedSessionMarkerSurvivesUntilItIsCleared() {
+        let store = LocalGameStore(defaults: defaults, directory: directory)
+
+        XCTAssertFalse(store.isAssistedSessionMarked)
+        store.setAssistedSessionMarked(true)
+        XCTAssertTrue(store.isAssistedSessionMarked)
+        XCTAssertTrue(
+            LocalGameStore(defaults: defaults, directory: directory).isAssistedSessionMarked,
+            "the marker must outlive the process, not the object"
+        )
+
+        store.setAssistedSessionMarked(false)
+        XCTAssertFalse(store.isAssistedSessionMarked)
+        XCTAssertNil(defaults.object(forKey: "nova-station.assisted-session"))
     }
 
     private func makeCheckpoint(identifier: String) -> ActiveCheckpoint {

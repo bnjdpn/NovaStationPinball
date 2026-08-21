@@ -1,5 +1,23 @@
-Nova Station Pinball is an original landscape pinball game. Use the on-screen flipper controls and plunger to play; the table guide is available from the home screen.
+Nova Station Pinball is an original single-player pinball game, landscape only, playable offline. Play with the on-screen flippers and the pull-and-release plunger; the interactive table guide is available from the home screen. No account and no demo credentials are required. Game Center is optional and used only for leaderboards; declining Game Center authentication does not block play or local scores.
 
-For submitted version 1.0, the current release configuration offers the complete game free upfront and it is playable without an account. Game Center is optional and is used only for leaderboards. Cancelling Game Center authentication does not block local play or local scores.
+WHAT THIS VERSION SELLS
+Version 1.1 introduces exactly one in-app purchase: com.bnjdpn.NovaStationPinball.workshop, "The Workshop" / "L'Atelier", a non-consumable one-time purchase. There is no subscription. It grants unlimited ball rewind (-3 s, -5 s, start of ball) with the table handed back in play, the replay of the last five seconds at 1x or 0.5x, and 14 shot drills that serve the ball from an identical state, each with a success rate and a best streak stored on the device.
 
-For this submitted version, Settings offers the three optional consumable tips declared by the release configuration: Coffee, Big thanks and Strong support. They unlock no feature, content, entitlement or service. This version has no advertising, analytics, tracking, paywall or subscription. No demo credentials are required.
+WHERE TO FIND IT
+1. Start a game from the home screen and let the ball reach play.
+2. Tap "Workshop" in the top-right corner of the table.
+3. The Workshop sheet lists Rewind, Watch it again and Shot drills; "Replay this ball" is free, "Replay the last 5 seconds" and the drills require the purchase. Tap "Unlock the Workshop" at the bottom to open the purchase sheet.
+The same purchase sheet also appears when the three free rewinds of a game have been used, and when a locked shot drill is tapped. For a direct capture, launching the app with the -paywall-screenshot argument opens the purchase sheet immediately; this argument does not enable any store fixture, so the real App Store offer is shown.
+
+The purchase sheet reads its name and price from StoreKit (Product.displayName / Product.displayPrice), states that this is a one-time purchase with nothing to renew and nothing to cancel, and carries a Restore purchase button, the Apple standard EULA link and the privacy policy link.
+
+WHAT REMAINS FREE
+The complete table, the 17 missions, the nine clearance promotions, multiball, tilt and nudge, the interactive guide, the local high scores, the Game Center leaderboard, three ball rewinds per game and the replay of the ball in play at 1x or 0.5x. A device that already ran version 1.0 keeps ten free rewinds per game instead of three; this flag is stored on the device only, is detected from pre-existing 1.0 data, and a fresh install is never treated as such.
+
+LEADERBOARD INTEGRITY
+Any run that used a rewind, a replay or a drill is flagged as assisted and is ranked on a separate local training board; it is never submitted to Game Center. Records created by earlier versions are unchanged.
+
+REMOVED IN THIS VERSION
+The three consumable tips of version 1.0 (tip.cafe, tip.merci, tip.soutien) are gone from the binary; an app that sells a product no longer asks for contributions. They are being removed from sale in App Store Connect. Statements in the 1.0 review notes about optional contributions no longer apply.
+
+This version contains no advertising, no analytics, no tracking, no network backend and no account.

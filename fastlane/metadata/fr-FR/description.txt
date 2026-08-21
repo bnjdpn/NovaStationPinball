@@ -2,6 +2,9 @@ Apprenez une table de flipper à fond — chaque rampe, couloir, mission et mult
 
 Chaque partie commence avec trois billes et un objectif clair : maintenir la station en ligne. Enchaînez les bumpers, gravissez les rampes, ouvrez le portail, terminez les missions chronométrées, obtenez neuf promotions d’habilitation et déclenchez le multibille. Une simulation déterministe précise garantit des rebonds, frappes, secousses et tilts cohérents.
 
+UNE TABLE GRATUITE, UN SEUL ACHAT FACULTATIF
+Gratuit pour tout le monde, sans limite de nombre de parties : la table complète, les 17 missions, les neuf promotions d’habilitation, le multibille, le tilt, le guide interactif, les records locaux, le classement Game Center, trois rembobinages de bille à chaque partie et le revisionnage de la bille en cours, en vitesse normale ou au ralenti. L’Atelier est la seule chose que vous puissiez acheter : un achat unique, jamais un abonnement, rien à renouveler et rien à résilier.
+
 PENSÉ POUR LE FLIPPER
 • Batteurs réactifs sous les deux pouces
 • Lanceur à tirer puis relâcher
@@ -11,10 +14,16 @@ PENSÉ POUR LE FLIPPER
 • Records locaux enregistrés sur votre appareil
 • Classement Game Center facultatif
 
+L’ATELIER
+Parce que la simulation est strictement déterministe, Nova Station peut remettre une bille perdue exactement là où elle était. L’Atelier lève la limite de rembobinages : revenez trois secondes, cinq secondes ou au début de la bille autant de fois que vous voulez, la table vous étant rendue à l’instant exact de votre choix. Il ajoute le revisionnage des cinq dernières secondes, au lieu de revoir toute la bille, et 14 exercices de tir qui servent la bille depuis une position identique autant de fois que vous le souhaitez — chacun avec son taux de réussite et sa meilleure série, gardés sur votre appareil.
+
+DES SCORES HONNÊTES
+Rembobiner, c’est de l’assistance, et c’est traité comme tel : toute partie où vous rembobinez ou revoyez une bille — y compris avec les trois rembobinages offerts — est classée sur un tableau d’entraînement distinct et n’est jamais envoyée au classement Game Center. Les scores que vous avez déjà réalisés restent tels quels.
+
 UNE TABLE COMPLÈTE
-La table 4:3 et sa console d’état restent entièrement visibles en paysage sur iPhone comme sur iPad. Des illustrations bitmap, sons et vibrations originaux composent une ambiance rétro-PC tactile et haut de gamme, avec une identité propre.
+La table 4:3 et sa console d’état restent entièrement visibles en paysage sur iPhone comme sur iPad. Des illustrations bitmap, sons et vibrations originaux composent une ambiance rétro-PC tactile, avec une identité propre.
 
 JOUEZ À VOTRE FAÇON
-Nova Station Pinball fonctionne hors ligne et ne demande aucun compte. L’app ne contient ni publicité ni suivi. Dans la version 1.0, le jeu entier est disponible gratuitement au téléchargement. Les pourboires facultatifs de cette version soutiennent le développement sans débloquer de fonction ni modifier le gameplay.
+Nova Station Pinball fonctionne hors ligne et ne demande aucun compte. L’app ne contient ni publicité ni suivi.
 
 Disponible en français et en anglais.

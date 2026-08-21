@@ -1,3 +1,11 @@
-Bienvenue à bord de Nova Station.
+L’Atelier arrive — et le jeu gratuit s’agrandit avec lui.
 
-La version 1.0 comprend un guide interactif du plateau, la table complète, la physique déterministe, les missions, neuf promotions d’habilitation, le multibille, le tilt, les records locaux, Game Center facultatif, les interfaces française et anglaise, ainsi que la prise en charge d’iPhone et d’iPad.
+Chaque partie comprend désormais trois rembobinages de bille et le revisionnage de la bille en cours, pour tout le monde, sans rien payer. Revenez trois secondes, cinq secondes, ou jusqu’au début de la bille, puis reprenez la table à l’instant exact de votre choix.
+
+L’Atelier, un achat unique et jamais un abonnement, lève cette limite : rembobinez autant que vous voulez, revoyez les cinq dernières secondes au lieu de toute la bille, et travaillez 14 exercices de tir servis depuis une position identique, chacun avec son taux de réussite et sa meilleure série.
+
+Vous jouiez à Nova Station avant cette mise à jour ? Cet appareil garde dix rembobinages offerts par partie au lieu de trois, définitivement.
+
+Rembobiner, c’est de l’assistance : toute partie où vous rembobinez ou revoyez une bille, rembobinages offerts compris, est classée sur un tableau d’entraînement distinct et n’est jamais envoyée au classement Game Center. Les scores déjà réalisés ne bougent pas, et la table complète, les 17 missions, les neuf promotions d’habilitation, le multibille, le tilt, le guide interactif et les records locaux restent gratuits.
+
+Corrigé également : une sauvegarde illisible est désormais mise de côté au lieu d’être supprimée.

@@ -95,6 +95,228 @@ final class AppModelRuntimeIntegrationTests: XCTestCase {
         XCTAssertTrue(harness.model.scene.currentSnapshot.balls.isEmpty)
     }
 
+    // MARK: - Workshop
+
+    func testAFreeRunGetsThreeRewindsAndThenMeetsThePaywall() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.activate()
+        harness.model.apply([.plungerReleased(1)])
+        harness.playForOneSecond(times: 8)
+
+        XCTAssertEqual(harness.model.freeRewindsPerGame, 3)
+        XCTAssertTrue(harness.model.canRewind(to: .threeSeconds))
+
+        for expected in [2, 1, 0] {
+            XCTAssertEqual(harness.model.rewind(to: .threeSeconds), .done)
+            XCTAssertEqual(harness.model.remainingFreeRewinds, expected)
+            harness.playForOneSecond(times: 8)
+        }
+
+        XCTAssertFalse(harness.model.canUseAnotherRewind)
+        XCTAssertEqual(harness.model.rewind(to: .threeSeconds), .needsWorkshop)
+    }
+
+    func testAnOwnedWorkshopRewindsWithoutSpendingAnAllowance() throws {
+        let harness = try RuntimeHarness(ownsWorkshop: true)
+        defer { harness.cleanup() }
+        harness.activate()
+        harness.model.apply([.plungerReleased(1)])
+        harness.playForOneSecond(times: 8)
+
+        for _ in 0 ..< 5 {
+            XCTAssertEqual(harness.model.rewind(to: .threeSeconds), .done)
+            harness.playForOneSecond(times: 8)
+        }
+
+        XCTAssertEqual(harness.model.rewindsUsedThisGame, 0)
+        XCTAssertTrue(harness.model.canUseAnotherRewind)
+    }
+
+    func testRewindingBeforeAnythingIsRecordedIsRefusedWithoutChargingTheAllowance() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.activate()
+
+        XCTAssertEqual(harness.model.rewind(to: .fiveSeconds), .noKeyframe)
+        XCTAssertEqual(harness.model.remainingFreeRewinds, 3)
+    }
+
+    func testARewoundGameIsRankedApartAndNeverSubmittedToGameCenter() throws {
+        let client = RuntimeRecordingGameCenterClient()
+        let harness = try RuntimeHarness(gameCenterClient: client)
+        defer { harness.cleanup() }
+        harness.activate()
+        harness.model.apply([.plungerReleased(1)])
+        harness.playForOneSecond(times: 8)
+        XCTAssertEqual(harness.model.rewind(to: .threeSeconds), .done)
+
+        let session = try MediaScenario.gameOver.makeSession()
+        harness.model.receive(sessionFrame: GameSessionFrame(
+            snapshot: session.snapshot,
+            rules: session.rules,
+            phase: session.phase,
+            events: [],
+            effects: [.gameOver(session.rules.score)]
+        ))
+
+        XCTAssertTrue(harness.model.isAssistedRun)
+        XCTAssertTrue(try harness.store.loadHighScores().isEmpty)
+        XCTAssertEqual(try harness.store.loadTrainingScores().count, 1)
+        XCTAssertEqual(client.submittedScores, [])
+        XCTAssertTrue(harness.store.isAssistedSessionMarked)
+    }
+
+    func testAnHonestGameStillReachesTheRankedBoardAndGameCenter() throws {
+        let client = RuntimeRecordingGameCenterClient()
+        let harness = try RuntimeHarness(gameCenterClient: client)
+        defer { harness.cleanup() }
+        let session = try MediaScenario.gameOver.makeSession()
+
+        harness.model.receive(sessionFrame: GameSessionFrame(
+            snapshot: session.snapshot,
+            rules: session.rules,
+            phase: session.phase,
+            events: [],
+            effects: [.gameOver(session.rules.score)]
+        ))
+
+        XCTAssertFalse(harness.model.isAssistedRun)
+        XCTAssertEqual(try harness.store.loadHighScores().count, 1)
+        XCTAssertTrue(try harness.store.loadTrainingScores().isEmpty)
+        XCTAssertEqual(client.submittedScores, [session.rules.score])
+    }
+
+    func testStartingANewGameClearsTheAssistedMarkerAndTheAllowance() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.activate()
+        harness.model.apply([.plungerReleased(1)])
+        harness.playForOneSecond(times: 8)
+        XCTAssertEqual(harness.model.rewind(to: .threeSeconds), .done)
+        XCTAssertTrue(harness.model.isAssistedRun)
+
+        let session = try MediaScenario.gameOver.makeSession()
+        harness.model.receive(sessionFrame: GameSessionFrame(
+            snapshot: session.snapshot,
+            rules: session.rules,
+            phase: .gameOver,
+            events: [],
+            effects: [.gameOver(session.rules.score)]
+        ))
+        harness.model.apply([.plungerReleased(1)])
+
+        XCTAssertFalse(harness.model.isAssistedRun)
+        XCTAssertFalse(harness.store.isAssistedSessionMarked)
+        XCTAssertEqual(harness.model.rewindsUsedThisGame, 0)
+        XCTAssertEqual(harness.model.gamePhase, .playing)
+    }
+
+    func testADrillNeedsTheWorkshopAndRecordsItsOwnStatistics() throws {
+        let locked = try RuntimeHarness()
+        defer { locked.cleanup() }
+        let drill = try XCTUnwrap(ShotDrillCatalog.drill(id: "ramp-left"))
+        XCTAssertEqual(locked.model.startDrill(drill), .needsWorkshop)
+
+        let harness = try RuntimeHarness(ownsWorkshop: true)
+        defer { harness.cleanup() }
+        harness.activate()
+
+        XCTAssertEqual(harness.model.startDrill(drill), .done)
+        XCTAssertEqual(harness.model.activeDrill, drill)
+        XCTAssertTrue(harness.model.isAssistedRun)
+        XCTAssertEqual(harness.model.drillEntry(for: drill).attempts, 0)
+
+        // Let the attempt run out of budget: the failure is recorded.
+        harness.model.receive(
+            sessionFrame: harness.model.scene.currentSessionFrame,
+            steps: drill.maximumTicks
+        )
+
+        XCTAssertEqual(harness.model.activeDrillOutcome, .failed)
+        XCTAssertEqual(harness.model.drillEntry(for: drill).attempts, 1)
+        XCTAssertEqual(harness.model.drillEntry(for: drill).successes, 0)
+        XCTAssertEqual(try harness.store.loadDrillProgress().entry(for: drill.id).attempts, 1)
+        XCTAssertTrue(try harness.store.loadHighScores().isEmpty)
+    }
+
+    func testTheAttemptCountdownRetryAndExitCloseTheDrillLoop() throws {
+        let harness = try RuntimeHarness(ownsWorkshop: true)
+        defer { harness.cleanup() }
+        harness.activate()
+        let drill = try XCTUnwrap(ShotDrillCatalog.drill(id: "ramp-left"))
+
+        XCTAssertEqual(harness.model.startDrill(drill), .done)
+        XCTAssertEqual(harness.model.activeDrillRemainingSeconds, drill.maximumSeconds)
+        XCTAssertTrue(harness.model.isRunningDrillAttempt)
+
+        // Halfway through the budget the countdown is visibly running down.
+        harness.model.receive(
+            sessionFrame: harness.model.scene.currentSessionFrame,
+            steps: drill.maximumTicks / 2
+        )
+        XCTAssertEqual(harness.model.activeDrillRemainingSeconds, drill.maximumSeconds / 2)
+        XCTAssertTrue(harness.model.isRunningDrillAttempt)
+
+        harness.model.receive(
+            sessionFrame: harness.model.scene.currentSessionFrame,
+            steps: drill.maximumTicks
+        )
+        XCTAssertEqual(harness.model.activeDrillOutcome, .failed)
+        XCTAssertEqual(harness.model.activeDrillRemainingSeconds, 0)
+        XCTAssertFalse(harness.model.isRunningDrillAttempt)
+        XCTAssertEqual(harness.model.drillEntry(for: drill).attempts, 1)
+
+        // Serving the same drill again restarts a full, undecided attempt.
+        XCTAssertEqual(harness.model.restartActiveDrill(), .done)
+        XCTAssertEqual(harness.model.activeDrill, drill)
+        XCTAssertEqual(harness.model.activeDrillOutcome, .running)
+        XCTAssertEqual(harness.model.activeDrillRemainingSeconds, drill.maximumSeconds)
+        XCTAssertTrue(harness.model.isRunningDrillAttempt)
+
+        // A second run out of budget is a second recorded attempt, so the
+        // evaluator is genuinely reset and not latched.
+        harness.model.receive(
+            sessionFrame: harness.model.scene.currentSessionFrame,
+            steps: drill.maximumTicks
+        )
+        XCTAssertEqual(harness.model.drillEntry(for: drill).attempts, 2)
+
+        // Leaving hands back an ordinary, unassisted game.
+        harness.model.endDrill()
+        XCTAssertNil(harness.model.activeDrill)
+        XCTAssertFalse(harness.model.isRunningDrillAttempt)
+        XCTAssertEqual(harness.model.activeDrillRemainingSeconds, 0)
+        XCTAssertFalse(harness.model.isAssistedRun)
+        XCTAssertEqual(harness.model.rewindsUsedThisGame, 0)
+        XCTAssertEqual(harness.model.restartActiveDrill(), .noKeyframe)
+    }
+
+    func testReviewingTheCurrentBallIsFreeAndTakingOverEndsIt() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.activate()
+        harness.model.apply([.plungerReleased(1)])
+        harness.playForOneSecond(times: 6)
+
+        XCTAssertEqual(harness.model.reviewBall(from: .ballStart, speed: 0.5), .done)
+        XCTAssertTrue(harness.model.isReviewingBall)
+        XCTAssertEqual(harness.model.remainingFreeRewinds, 3, "reviewing must not cost a rewind")
+
+        harness.model.resumeFromReview()
+        XCTAssertFalse(harness.model.isReviewingBall)
+    }
+
+    func testReviewingFurtherBackIsPartOfTheWorkshop() throws {
+        let harness = try RuntimeHarness()
+        defer { harness.cleanup() }
+        harness.activate()
+        harness.model.apply([.plungerReleased(1)])
+        harness.playForOneSecond(times: 8)
+
+        XCTAssertEqual(harness.model.reviewBall(from: .fiveSeconds, speed: 1), .needsWorkshop)
+    }
+
     func testTableGuidePausesAndResumesATableThatWasRunning() throws {
         let harness = try RuntimeHarness()
         defer { harness.cleanup() }
@@ -168,7 +390,8 @@ private final class RuntimeHarness {
 
     init(
         gameCenterClient: any GameCenterClient = NullGameCenterClient(),
-        mediaLaunchConfiguration: MediaLaunchConfiguration = MediaLaunchConfiguration(arguments: ["app"])
+        mediaLaunchConfiguration: MediaLaunchConfiguration = MediaLaunchConfiguration(arguments: ["app"]),
+        ownsWorkshop: Bool = false
     ) throws {
         suiteName = "AppModelRuntimeIntegrationTests.\(UUID().uuidString)"
         defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -179,7 +402,11 @@ private final class RuntimeHarness {
             hapticsService: NullHapticsService(),
             gameCenterClient: gameCenterClient,
             localGameStore: store,
-            tipJarSupport: NullTipJarSupport(),
+            store: StoreService(
+                backend: NullWorkshopStoreBackend(),
+                userDefaults: defaults,
+                bypassesStore: ownsWorkshop
+            ),
             mediaLaunchConfiguration: mediaLaunchConfiguration
         )
     }
@@ -187,6 +414,16 @@ private final class RuntimeHarness {
     func activate() {
         model.setApplicationActivity(.active)
         model.lifecycleCoordinator.start()
+    }
+
+    /// Runs the real scene loop for `times` simulated seconds so the rewind
+    /// ring actually fills with keyframes.
+    func playForOneSecond(times: Int) {
+        var clock = 0.0
+        for _ in 0 ..< (times * 240 / 8) {
+            clock += 8.0 / 240.0
+            model.scene.update(clock)
+        }
     }
 
     func cleanup() {

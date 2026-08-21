@@ -44,8 +44,13 @@ struct MediaLaunchConfiguration: Equatable, Sendable {
     let scenario: MediaScenario?
     let runsPreviewSequence: Bool
     let handshakeToken: String?
+    /// `-paywall-screenshot` opens the Workshop paywall on launch. Both the
+    /// store screenshot pipeline and the App Store Connect in-app-purchase
+    /// review capture depend on it.
+    let opensPaywall: Bool
 
     init(arguments: [String]) {
+        opensPaywall = arguments.contains("-paywall-screenshot")
         let isUITesting = arguments.contains("-ui-testing")
         guard isUITesting else {
             scenario = nil

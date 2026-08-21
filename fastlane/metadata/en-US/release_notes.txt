@@ -1,3 +1,11 @@
-Welcome aboard Nova Station.
+The Workshop arrives — and the free game grows with it.
 
-Version 1.0 includes an interactive table guide, the complete pinball table, deterministic physics, missions, nine clearance promotions, multiball, tilt, local high scores, optional Game Center, English and French interfaces, and full iPhone and iPad support.
+Every game now includes three ball rewinds and the replay of the ball you are playing, for everyone, at no cost. Go back three seconds, five seconds, or all the way to the start of the ball, then take the table back at the exact instant you choose.
+
+The Workshop, a one-time purchase and never a subscription, lifts that limit: rewind as often as you want, replay the last five seconds instead of the whole ball, and work through 14 shot drills served from an identical position, each with its own success rate and best streak.
+
+Played Nova Station before this update? This device keeps ten free rewinds per game instead of three, for good.
+
+Rewinding is assistance and is treated as such: any game in which you rewind or replay a ball, free rewinds included, is ranked on a separate training board and is never sent to the Game Center leaderboard. Scores you have already set are untouched, and the complete table, the 17 missions, the nine clearance promotions, multiball, tilt, the interactive guide and the local high scores stay free.
+
+Also fixed: an unreadable saved game is now kept aside instead of being deleted.

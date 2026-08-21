@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-08-20T10:13:05+00:00",
+  "screenshot": "workshop_paywall_review.png",
+  "screenshot_sha256": "a00285134a82f71d579cb5e705ab303ef6da3564fbb5c767ddcb480c30f5d353",
+  "screenshot_size": [
+    2752,
+    2064
+  ],
+  "product_id": "com.bnjdpn.NovaStationPinball.workshop",
+  "displayed_price": "€4.99",
+  "storefront": "FRA",
+  "expected_base_price": "4.99",
+  "expected_base_currency": "EUR",
+  "price_source": "NovaStationPinball.storekit via SKTestSession, pinned to the base territory of fastlane/pro_products.json"
+}

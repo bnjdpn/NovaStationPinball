@@ -29,7 +29,7 @@ let package = Package(
                 "Services/GameCenterClient.swift",
                 "Services/HapticsService.swift",
                 "Services/LocalGameStore.swift",
-                "Services/TipJarSupport.swift"
+                "Services/StoreService.swift"
             ],
             sources: [
                 "App/GameCompletionGate.swift",
@@ -53,7 +53,7 @@ let package = Package(
                 "LocalGameStoreTests.swift",
                 "OptionalEffectsLifecycleTests.swift",
                 "SimulationDriverTests.swift",
-                "TipJarSupportTests.swift",
+                "StoreServiceTests.swift",
                 "TouchInterpreterTests.swift"
             ],
             sources: [

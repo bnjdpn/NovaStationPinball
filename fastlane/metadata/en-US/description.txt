@@ -2,6 +2,9 @@ Learn one pinball table deeply — every ramp, lane, mission and multiball — t
 
 Every launch begins with three balls and a clear objective: keep the station online. Chain bumper hits, climb the ramps, open the portal, complete timed missions, earn nine clearance promotions and trigger multiball. A precise deterministic simulation keeps every rebound, flipper strike, nudge and tilt consistent.
 
+A FREE TABLE, ONE OPTIONAL PURCHASE
+Free for everyone, with no limit on how much you play: the complete table, the 17 missions, the nine clearance promotions, multiball, tilt, the interactive guide, the local high scores, the Game Center leaderboard, three ball rewinds in every game and the replay of the ball you are playing, at normal speed or in slow motion. The Workshop is the only thing you can buy — a one-time purchase, never a subscription, nothing to renew and nothing to cancel.
+
 BUILT FOR PINBALL
 • Responsive two-thumb flippers
 • Pull-and-release plunger
@@ -11,10 +14,16 @@ BUILT FOR PINBALL
 • Local high scores saved on your device
 • Optional Game Center leaderboard
 
+THE WORKSHOP
+Because the simulation is strictly deterministic, Nova Station can put a lost ball back exactly where it was. The Workshop lifts the rewind limit: go back three seconds, five seconds or to the start of the ball as often as you want, with the table handed straight back to you at the instant you choose. It adds a replay that starts five seconds back instead of replaying the whole ball, and 14 shot drills that serve the ball from an identical position as many times as you like — each one keeping its own success rate and best streak on your device.
+
+HONEST SCORES
+Rewinding is assistance, so it is treated as such. Any game in which you rewind or replay a ball — the three free rewinds included — is ranked on a separate training board and is never sent to the Game Center leaderboard. Scores you have already set stay exactly as they are.
+
 ONE COMPLETE TABLE
-The full 4:3 table and its status console remain visible in landscape on both iPhone and iPad. Original raster artwork, sound and haptics create a tactile premium retro-PC atmosphere without copying another game’s identity.
+The full 4:3 table and its status console remain visible in landscape on both iPhone and iPad. Original raster artwork, sound and haptics create a tactile retro-PC atmosphere without copying another game’s identity.
 
 PLAY ON YOUR TERMS
-Nova Station Pinball works offline and requires no account. It contains no advertising and no tracking. In version 1.0, the entire game is available free upfront. Optional tips in this version support development but unlock no features and do not change gameplay.
+Nova Station Pinball works offline and requires no account. It contains no advertising and no tracking.
 
 Available in English and French.

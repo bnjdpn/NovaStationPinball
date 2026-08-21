@@ -1,1 +1,1 @@
-pinball machine,arcade,table,ball,space,flip,bumper,multiball,physics,offline
+machine,table,ball,flipper,bumper,multiball,tilt,physics,offline,classic,simulator,score,solo

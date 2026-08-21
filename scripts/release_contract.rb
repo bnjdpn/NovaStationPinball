@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "bigdecimal"
+require "digest"
 require "json"
 require "pathname"
 require "yaml"
@@ -9,12 +10,31 @@ require_relative "pages_workflow_contract"
 
 module NovaStationPinballReleaseContract
   ROOT = File.expand_path("..", __dir__)
+
+  # The shipped drill identifiers, read from the core catalog so the contract
+  # can never drift away from the code that defines them.
+  module ShotDrillIdentifiers
+    SOURCE = File.join(ROOT, "NovaStationCore/Sources/NovaStationCore/ShotDrillCatalog.swift")
+
+    def self.all
+      body = File.read(SOURCE, encoding: "UTF-8")[/public static let drills: \[ShotDrill\] = \[(.*?)\n    \]/m, 1].to_s
+      body.scan(/drill\("([a-z0-9-]+)"/).flatten
+    end
+  end
+  # Strings that print a count. Each one must vary by grammatical number, on
+  # the named argument, in every shipped locale: "1 attempts" on the screen
+  # that sells the Workshop is slop, and it is a regression that comes back.
+  COUNT_STRINGS = {
+    "workshop.rewind.remaining" => 1,
+    "workshop.drills.record" => 2,
+    "drill.hud.remaining" => 1
+  }.freeze
   BUNDLE_ID = "com.bnjdpn.NovaStationPinball"
   REQUIRED_LOCALES = %w[en-US fr-FR].freeze
   REQUIRED_LANES = %w[
     setup_asc release_contract asc_status metadata recover_metadata_pretransport screenshots app_previews adopt_media media_contract upload_screenshots
     upload_previews build_release upload_release submit_review release_quick pricing
-    iap_status iap_sync
+    iap_status iap_sync paywall_review_screenshot
   ].freeze
   FORMSPREE_ENDPOINT = "https://formspree.io/f/mykqbyyw"
 
@@ -30,6 +50,7 @@ module NovaStationPinballReleaseContract
       validate_package
       validate_bootstrap_sources
       validate_release_config
+      validate_release_pipeline_products
       validate_metadata
       validate_privacy_manifest
       validate_media_pipeline
@@ -49,16 +70,19 @@ module NovaStationPinballReleaseContract
         NovaStationPinball/NovaStationPinball.entitlements
         NovaStationPinball/App/NovaStationPinballApp.swift
         NovaStationPinball/App/AppModel.swift
+        NovaStationPinball/App/RootView.swift
+        NovaStationPinball/Services/StoreService.swift
         NovaStationPinballTests/BootstrapTests.swift
         NovaStationPinballUITests/BootstrapUITests.swift
         NovaStationPinballUITests/StoreScreenshotUITests.swift
         NovaStationPinballUITests/AppPreviewUITests.swift
-        NovaStationPinballUITests/TipJarReviewUITests.swift
+        NovaStationPinballUITests/PaywallReviewUITests.swift
         NovaStationPinball/App/MediaScenario.swift
         NovaStationPinball/App/MediaPreviewHandshake.swift
         NovaStationCore/Sources/NovaStationCore/NovaStationCore.swift
         NovaStationCore/Tests/NovaStationCoreTests/NovaStationCoreTests.swift
         fastlane/Fastfile fastlane/Appfile fastlane/release_config.json
+        fastlane/pro_products.json
         fastlane/media_adoption_contract.json
         fastlane/metadata_preflight.rb
         fastlane/metadata_pretransport_recovery.json
@@ -88,11 +112,12 @@ module NovaStationPinballReleaseContract
       error("iOS deployment target must be 17.0") unless target["deploymentTarget"] == "17.0"
       error("Swift version must be 6.0") unless settings["SWIFT_VERSION"] == "6.0"
       error("device families must be iPhone and iPad") unless settings["TARGETED_DEVICE_FAMILY"] == "1,2"
-      error("marketing version must be controlled by Xcode build settings") unless
-        settings["MARKETING_VERSION"] == "1.0" &&
+      config_version = JSON.parse(File.read(path("fastlane/release_config.json"), encoding: "UTF-8")).fetch("version")
+      error("marketing version must match the release configuration") unless
+        settings["MARKETING_VERSION"] == config_version &&
           info["CFBundleShortVersionString"] == "$(MARKETING_VERSION)"
       error("build number must be controlled by Xcode build settings") unless
-        settings["CURRENT_PROJECT_VERSION"] == "1" &&
+        settings["CURRENT_PROJECT_VERSION"].to_s.match?(/\A[1-9][0-9]*\z/) &&
           info["CFBundleVersion"] == "$(CURRENT_PROJECT_VERSION)"
       error("export compliance declaration must be explicit") unless
         info["ITSAppUsesNonExemptEncryption"] == false
@@ -103,7 +128,13 @@ module NovaStationPinballReleaseContract
       error("XcodeGen targets are incomplete") unless project.fetch("targets").keys.sort == expected_targets
       error("app sources are incomplete") unless source_paths(target) == ["NovaStationPinball"]
       error("unit test sources are incomplete") unless source_paths(project.fetch("targets").fetch("NovaStationPinballTests")) == ["NovaStationPinballTests"]
-      error("UI test sources are incomplete") unless source_paths(project.fetch("targets").fetch("NovaStationPinballUITests")) == ["NovaStationPinballUITests"]
+      # The second entry is a resource, not code: SKTestSession loads the
+      # catalogue from the UI test bundle, which is the only way the review
+      # capture can price the offer from this repository instead of from the
+      # live App Store.
+      error("UI test sources are incomplete") unless
+        source_paths(project.fetch("targets").fetch("NovaStationPinballUITests")) ==
+          ["NovaStationPinballUITests", "NovaStationPinball/StoreKit/NovaStationPinball.storekit"]
     rescue StandardError => exception
       error("invalid project.yml: #{exception.message}")
     end
@@ -139,15 +170,19 @@ module NovaStationPinballReleaseContract
       error("configured price must be non-negative") if BigDecimal(pricing.fetch("price").to_s).negative?
       error("pricing territory must be configured") if pricing.fetch("territory", "").strip.empty?
       error("pricing currency must be configured") if pricing.fetch("currency", "").strip.empty?
-      products = config.fetch("tip_products")
+      error("the tip jar catalogue must be gone from the release configuration") if config.key?("tip_products")
+      products = config.fetch("iap_products")
       error("configured monetization products must be an array") unless products.is_a?(Array)
       product_ids = products.map { |product| product.fetch("product_id") }
       error("configured monetization product ids must be unique") unless product_ids.uniq.length == product_ids.length
       products.each do |product|
         error("configured monetization product id is missing") if product.fetch("product_id", "").strip.empty?
         error("configured monetization product type is invalid") unless product.fetch("type", "").match?(/\A[A-Z][A-Z0-9_]*\z/)
+        error("a tip product must not be sold alongside a paid unlock") if product.fetch("product_id", "").include?(".tip.")
       end
       error("iap list must mirror configured monetization products") unless config.fetch("iap").sort == product_ids.sort
+      validate_monetization_strategy(config, product_ids)
+      validate_products_manifest(config)
       error("support URL mismatch") unless config["support_url"] == "https://bnjdpn.github.io/NovaStationPinball/#contact"
       expected_scenarios = %w[launch mission promotion multiball tilt game-over]
       expected_preview_policy = {
@@ -166,6 +201,138 @@ module NovaStationPinballReleaseContract
       error("media scenarios mismatch") unless media["scenarios"] == expected_scenarios
     rescue StandardError => exception
       error("invalid release config: #{exception.message}")
+    end
+
+    def validate_monetization_strategy(config, product_ids)
+      strategy = config.fetch("monetization_strategy")
+      error("monetization model must be the decided one-time unlock") unless strategy["model"] == "one_time_unlock"
+      error("monetization strategy must name the sold product") unless product_ids.include?(strategy["product_id"])
+      price = BigDecimal(strategy.fetch("base_price").to_s)
+      error("monetization base price must be inside the studio 3.99-9.99 band") unless
+        price >= BigDecimal("3.99") && price <= BigDecimal("9.99")
+      error("monetization base currency must be configured") unless strategy["base_currency"] == "EUR"
+      error("monetization base territory must be configured") unless strategy["base_territory"] == "FRA"
+      error("monetization strategy must point at the products manifest") unless
+        strategy["products_manifest"] == "fastlane/pro_products.json"
+      %w[free_forever unlocks].each do |key|
+        value = strategy[key]
+        error("monetization strategy #{key} must list what it means") unless value.is_a?(Array) && !value.empty?
+      end
+      error("removing the tip jar must be recorded with its ASC action") unless
+        strategy["tips_removed_on"].to_s.match?(/\A\d{4}-\d{2}-\d{2}\z/) &&
+          strategy["tips_asc_action"].to_s.include?("DEVELOPER_REMOVED_FROM_SALE")
+      error("leaderboard integrity must be stated with the paid assistance") unless
+        strategy["leaderboard_integrity"].to_s.match?(/Game Center/)
+      error("grandfathering must be described as device-local and never revoked") unless
+        strategy["grandfathering"].to_s.match?(/device-local/i) &&
+          strategy["grandfathering"].to_s.match?(/never revoked/i)
+    rescue StandardError => exception
+      error("invalid monetization strategy: #{exception.message}")
+    end
+
+    def validate_products_manifest(config)
+      manifest = JSON.parse(File.read(path("fastlane/pro_products.json"), encoding: "UTF-8"))
+      error("products manifest bundle mismatch") unless manifest["bundle_id"] == BUNDLE_ID
+      error("products manifest must sell no subscription group") unless manifest["subscription_group"].nil?
+      products = manifest.fetch("products")
+      error("products manifest must mirror the configured IAP list") unless
+        products.map { |product| product.fetch("product_id") }.sort == config.fetch("iap").sort
+      products.each do |product|
+        error("products manifest must sell a non-consumable unlock") unless product.fetch("type") == "NON_CONSUMABLE"
+        error("a one-time unlock must carry no introductory offer") unless product.fetch("introductory_offer").nil?
+        localizations = product.fetch("localizations")
+        error("products manifest must localize every store locale") unless
+          localizations.keys.sort == REQUIRED_LOCALES
+        localizations.each do |locale, localization|
+          name = localization.fetch("name")
+          description = localization.fetch("description")
+          error("IAP display name exceeds 30 characters for #{locale}") if name.length > 30
+          error("IAP description exceeds 45 characters for #{locale}") if description.length > 45
+          error("IAP display name is empty for #{locale}") if name.strip.empty?
+          error("IAP description is empty for #{locale}") if description.strip.empty?
+        end
+        notes = product.fetch("review_notes")
+        error("IAP review notes must enumerate what is unlocked") unless notes.match?(/rewind/i) && notes.match?(/drill/i)
+        error("IAP review notes must state what stays free") unless notes.match?(/free/i)
+        error("IAP review notes must tell App Review how to reach the paywall") unless
+          notes.include?("-paywall-screenshot")
+      end
+      removed = manifest.fetch("removed_from_sale")
+      error("the three 1.0 tips must be scheduled for removal from sale") unless
+        removed.map { |product| product.fetch("product_id") }.sort == [
+          "com.bnjdpn.NovaStationPinball.tip.cafe",
+          "com.bnjdpn.NovaStationPinball.tip.merci",
+          "com.bnjdpn.NovaStationPinball.tip.soutien"
+        ]
+      error("tips must be targeted at DEVELOPER_REMOVED_FROM_SALE") unless
+        removed.all? { |product| product.fetch("target_state") == "DEVELOPER_REMOVED_FROM_SALE" }
+    rescue StandardError => exception
+      error("invalid products manifest: #{exception.message}")
+    end
+
+    # The release pipeline must sell whatever the release configuration
+    # declares. A pipeline that hard-codes a purchase type or the removed tip
+    # jar is a dead pipeline: it fails closed on the very release that changes
+    # the catalogue, and it does so after the contract has already said OK.
+    PRODUCT_AWARE_PIPELINE_SCRIPTS = %w[
+      scripts/app_store/iap_status.rb
+      scripts/app_store/iap_sync.rb
+      scripts/app_store/review_submission.rb
+    ].freeze
+    PRODUCT_AWARE_LANES = %w[submit_review iap_status iap_sync].freeze
+    PURCHASE_TYPES = /(?:NON_)?CONSUMABLE/.freeze
+    RETIRED_JAR = /\btips?\b/i.freeze
+
+    def validate_release_pipeline_products
+      config = JSON.parse(File.read(path("fastlane/release_config.json"), encoding: "UTF-8"))
+      declared_ids = config.fetch("iap_products").map { |product| product.fetch("product_id") }
+      retired = config.fetch("retired_iap_products")
+      error("retired products must be declared as a list") unless retired.is_a?(Array)
+      retired_ids = retired.map { |product| product.fetch("product_id") }
+      error("a retired product must not also be sold") unless (retired_ids & declared_ids).empty?
+      error("every retired product must name its target state") unless
+        retired.all? { |product| product.fetch("target_state") == "DEVELOPER_REMOVED_FROM_SALE" }
+      manifest = JSON.parse(File.read(path("fastlane/pro_products.json"), encoding: "UTF-8"))
+      error("retired products must mirror the products manifest") unless
+        retired_ids.sort == manifest.fetch("removed_from_sale").map { |product| product.fetch("product_id") }.sort
+
+      PRODUCT_AWARE_PIPELINE_SCRIPTS.each do |relative|
+        source = File.read(path(relative), encoding: "UTF-8")
+        error("the release pipeline still hard-codes a purchase type in #{relative}") if
+          source.match?(PURCHASE_TYPES)
+        error("the release pipeline still names the removed jar in #{relative}") if
+          source.match?(RETIRED_JAR)
+      end
+      %w[
+        scripts/app_store/iap_status.rb
+        scripts/app_store/review_submission.rb
+      ].each do |relative|
+        source = File.read(path(relative), encoding: "UTF-8")
+        error("#{relative} must validate products against the release configuration") unless
+          source.include?("iap_products")
+      end
+      sync = File.read(path("scripts/app_store/iap_sync.rb"), encoding: "UTF-8")
+      error("iap_sync must delegate the readback to iap_status") unless
+        sync.include?("NovaStationPinballIapStatus.run!")
+
+      submit = File.read(path("scripts/app_store/review_submission.rb"), encoding: "UTF-8")
+      error("a never-shipped product must be submitted with the app version") unless
+        submit.include?("must_bundle") &&
+          submit.include?("IAP version must be submitted with the app version")
+
+      status = File.read(path("scripts/app_store/status.rb"), encoding: "UTF-8")
+      error("the IAP readback must report retired products on their own line") unless
+        status.include?('"retired_product_ids"')
+
+      fastfile = File.read(path("fastlane/Fastfile"), encoding: "UTF-8")
+      PRODUCT_AWARE_LANES.each do |lane|
+        description = fastfile[/^\s*desc "([^"]*)"\n\s*lane :#{Regexp.escape(lane)}\b/, 1].to_s
+        error("missing description for lane #{lane}") if description.empty?
+        error("the #{lane} lane description still describes the removed jar") if
+          description.match?(RETIRED_JAR)
+      end
+    rescue StandardError => exception
+      error("invalid release pipeline product contract: #{exception.message}")
     end
 
     def validate_metadata
@@ -418,9 +585,11 @@ module NovaStationPinballReleaseContract
       storekit = JSON.parse(File.read(path("NovaStationPinball/StoreKit/NovaStationPinball.storekit"), encoding: "UTF-8"))
       products = storekit.fetch("products")
       release_config = JSON.parse(File.read(path("fastlane/release_config.json"), encoding: "UTF-8"))
-      configured_products = release_config.fetch("tip_products")
+      configured_products = release_config.fetch("iap_products")
       expected_product_ids = configured_products.map { |product| product.fetch("product_id") }.sort
       error("StoreKit configuration must mirror configured monetization products") unless products.map { |product| product.fetch("productID") }.sort == expected_product_ids
+      error("StoreKit configuration must ship no subscription") unless
+        storekit.fetch("subscriptionGroups").empty? && storekit.fetch("nonRenewingSubscriptions").empty?
       type_map = {
         "CONSUMABLE" => "Consumable",
         "NON_CONSUMABLE" => "NonConsumable",
@@ -434,13 +603,10 @@ module NovaStationPinballReleaseContract
       error("StoreKit product types must mirror the release configuration") unless products.all? do |product|
         product.fetch("type") == configured_types.fetch(product.fetch("productID"))
       end
-      configured_tip_ids = configured_products.each_with_object([]) do |product, ids|
-        ids << product.fetch("product_id") if product.fetch("id", "").start_with?("tip.")
-      end
-      error("configured tip products must unlock no features") unless products.select { |product| configured_tip_ids.include?(product.fetch("productID")) }.all? do |product|
-        product.fetch("localizations").all? do |localization|
-          localization.fetch("description").match?(/(?:Unlocks no features|ne débloque aucune fonctionnalité)/i)
-        end
+      manifest_prices = JSON.parse(File.read(path("fastlane/pro_products.json"), encoding: "UTF-8"))
+        .fetch("products").to_h { |product| [product.fetch("product_id"), product.fetch("base_price")] }
+      error("StoreKit display prices must mirror the products manifest") unless products.all? do |product|
+        product.fetch("displayPrice") == manifest_prices[product.fetch("productID")]
       end
 
       project = YAML.safe_load(File.read(path("project.yml"), encoding: "UTF-8"), aliases: false)
@@ -452,7 +618,7 @@ module NovaStationPinballReleaseContract
         error("StoreKit development configuration must be attached to the run scheme")
       end
 
-      %w[AudioEngine.swift HapticsService.swift GameCenterClient.swift TipJarSupport.swift].each do |filename|
+      %w[AudioEngine.swift HapticsService.swift GameCenterClient.swift StoreService.swift].each do |filename|
         source = File.read(path("NovaStationPinball/Services/#{filename}"), encoding: "UTF-8")
         error("required network client in #{filename}") if source.match?(/\b(?:URLSession|NWConnection)\b/)
       end
@@ -474,97 +640,12 @@ module NovaStationPinballReleaseContract
           app_model.include?("func start()") && app_model.include?("startOptionalServices()") &&
           app_model.include?("lifecycleCoordinator.start()")
 
-      tip_identifiers = %w[tipJarOpen tipJar tipJarClose tipJarStatus]
-      tip_identifiers.each do |identifier|
-        error("tip UI is missing stable identifier #{identifier}") unless
-          root_view.include?(%Q{"#{identifier}"})
-      end
-      unless root_view.include?('"tipJarPurchase.\(tip.definition.id)"')
-        error("tip UI must derive stable purchase identifiers from the exact tip catalog")
-      end
-      unless root_view.include?("model.availableTips()") &&
-             root_view.match?(/model\.purchaseTip\(\s*productIdentifier:/m) &&
-             root_view.include?("tip.displayName") &&
-             root_view.include?("tip.displayPrice")
-        error("tip UI must load StoreKit names and prices only after explicit access")
-      end
-      if root_view.match?(/(?:USD|EUR|\$\s*\d|\d+[.,]\d{2}\s*€)/)
-        error("tip UI must not hard-code prices or currencies")
-      end
-      tip_support = File.read(path("NovaStationPinball/Services/TipJarSupport.swift"), encoding: "UTF-8")
-      unless tip_support.include?("displayName: product.displayName") &&
-             tip_support.include?("displayPrice: product.displayPrice") &&
-             app_model.include?("TipJarSupportFactory.applicationDefault()")
-        error("shipping tip names and prices must come from StoreKit.Product")
-      end
-      unless tip_support.match?(/#if DEBUG.*?NOVA_TIP_JAR_FIXTURE.*?#endif/m) &&
-             tip_support.match?(/#if DEBUG.*?actor UITestingTipJarSupport.*?#endif/m) &&
-             tip_support.include?('arguments.contains("-ui-testing")') &&
-             tip_support.include?('environment["NOVA_TIP_JAR_FIXTURE"] == "available"') &&
-             tip_support.include?("return StoreKitTipJarSupport()")
-        error("tip UI fixture must be DEBUG-only, double-gated, and default to StoreKit")
-      end
-      unless tip_support.include?("Transaction.unfinished") &&
-             tip_support.include?("Transaction.updates") &&
-             tip_support.include?("knownProductIdentifiers.contains(transaction.productIdentifier)") &&
-             tip_support.include?("await transaction.finish()")
-        error("shipping tip support must finish verified catalog transactions delivered after a pending purchase")
-      end
-      products.each do |product|
-        localizations = product.fetch("localizations")
-        english_name = localizations.find { |entry| entry["locale"] == "en_US" }.fetch("displayName")
-        french_name = localizations.find { |entry| entry["locale"] == "fr_FR" }.fetch("displayName")
-        price = product.fetch("displayPrice")
-        french_price = price.tr(".", ",")
-        unless tip_support.include?(%Q{displayName: french ? "#{french_name}" : "#{english_name}"}) &&
-               tip_support.include?(%Q{displayPrice: french ? "#{french_price} €" : "$#{price}"})
-          error("tip UI fixture must mirror the StoreKit name and price for #{product.fetch("productID")}")
-        end
-      end
-      ui_tests = File.read(path("NovaStationPinballUITests/LayoutUITests.swift"), encoding: "UTF-8")
-      tip_identifiers.each do |identifier|
-        error("tip UI test is missing #{identifier}") unless ui_tests.include?(identifier)
-      end
-      %w[tip.cafe tip.merci tip.soutien].each do |tip_id|
-        error("tip UI test is missing resolved purchase identifier #{tip_id}") unless
-          ui_tests.include?(%Q{"#{tip_id}"})
-      end
-      unless ui_tests.include?('app.buttons["tipJarPurchase.\(identifier)"]')
-        error("tip UI test must resolve each exact tip through the dynamic purchase identifier")
-      end
-      unless ui_tests.include?('launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"') &&
-             ui_tests.include?("-ui-testing")
-        error("tip UI test must explicitly activate both fixture gates")
-      end
-      screenshot_tests = File.read(path("NovaStationPinballUITests/StoreScreenshotUITests.swift"), encoding: "UTF-8")
-      preview_tests = File.read(path("NovaStationPinballUITests/AppPreviewUITests.swift"), encoding: "UTF-8")
-      unless screenshot_tests.include?("tipJarOpen") && preview_tests.include?("tipJarOpen")
-        error("shipping media tests must prove visible tip access")
-      end
-      if screenshot_tests.include?("NOVA_TIP_JAR_FIXTURE") || preview_tests.include?("NOVA_TIP_JAR_FIXTURE")
-        error("shipping media must never use the UI-test tip fixture")
-      end
-      review_test = File.read(path("NovaStationPinballUITests/TipJarReviewUITests.swift"), encoding: "UTF-8")
-      xcode_project = File.read(path("NovaStationPinball.xcodeproj/project.pbxproj"), encoding: "UTF-8")
-      unless review_test.include?('launchEnvironment["NOVA_TIP_JAR_FIXTURE"] = "available"') &&
-             review_test.include?("XCUIScreen.main.screenshot()") &&
-             review_test.include?("screenshot.image.cgImage") &&
-             review_test.include?("[2064, 2752]") &&
-             review_test.include?("fixture DEBUG") &&
-             !review_test.include?("purchaseButton.tap()") &&
-             xcode_project.include?("TipJarReviewUITests.swift in Sources")
-        error("IAP review capture must be compiled, fixture-labelled, full-screen, pixel-validated at 2752x2064, and non-purchasing")
-      end
-      background_is_conditional = root_view.match?(
-        /if activeOverlay == nil \{\s+Rectangle\(\)\.fill\(\.clear\).*?"art\.frame\.4x3".*?HStack\(spacing: 0\).*?"art\.table".*?"art\.console"/m
-      )
-      unless background_is_conditional &&
-             root_view.scan(".accessibilityAddTraits(.isModal)").length >= 2 &&
-             root_view.include?(".frame(width: 44, height: 44)") &&
-             ui_tests.include?('app.otherElements["art.frame.4x3"].exists') &&
-             ui_tests.include?('app.buttons["tipJarClose"].frame.width')
-        error("tip modal must hide background accessibility and expose a tested 44pt close target")
-      end
+      validate_tip_jar_removal
+      validate_store_service
+      validate_plural_strings
+      validate_workshop_ui(root_view)
+      validate_paywall_ui(root_view)
+      validate_leaderboard_integrity(app_model)
 
       entitlements = File.read(path("NovaStationPinball/NovaStationPinball.entitlements"), encoding: "UTF-8")
       unless entitlements.match?(/<key>com\.apple\.developer\.game-center<\/key>\s*<true\/>/)
@@ -572,6 +653,480 @@ module NovaStationPinballReleaseContract
       end
     rescue StandardError => exception
       error("invalid optional services configuration: #{exception.message}")
+    end
+
+    # An app that sells a product no longer asks for tips: no tip source, no
+    # tip string, no tip identifier anywhere in the shipped surface.
+    def validate_tip_jar_removal
+      %w[
+        NovaStationPinball/Services/TipJarSupport.swift
+        NovaStationPinballTests/TipJarSupportTests.swift
+        NovaStationPinballUITests/TipJarReviewUITests.swift
+      ].each do |relative|
+        error("#{relative} must be deleted, not merely unused") if File.file?(path(relative))
+      end
+
+      shipped_sources = Dir.glob(path("NovaStationPinball/**/*.swift")) +
+        Dir.glob(path("NovaStationCore/**/*.swift"))
+      test_sources = Dir.glob(path("NovaStationPinballTests/**/*.swift")) +
+        Dir.glob(path("NovaStationPinballUITests/**/*.swift"))
+      (shipped_sources + test_sources).each do |absolute|
+        relative = Pathname.new(absolute).relative_path_from(Pathname.new(@root)).to_s
+        contents = File.read(absolute, encoding: "UTF-8")
+        error("tip jar reference survives in #{relative}") if contents.match?(/TipJar|tipJar|NOVA_TIP_JAR_FIXTURE/)
+        # Tests are allowed to name the removed copy in order to assert its
+        # absence; shipped sources are not.
+        next unless shipped_sources.include?(absolute)
+        error("tip copy survives in #{relative}") if contents.match?(/pourboire/i)
+      end
+
+      catalog = JSON.parse(File.read(path("NovaStationPinball/Resources/Localizable.xcstrings"), encoding: "UTF-8"))
+      strings = catalog.fetch("strings")
+      error("tip strings still ship") if strings.keys.any? { |key| key.start_with?("tips.") }
+      strings.each do |key, entry|
+        entry.fetch("localizations", {}).each do |locale, localization|
+          value = localization.dig("stringUnit", "value").to_s
+          if value.match?(/pourboire/i) || value.match?(/tip jar/i)
+            error("tip copy survives in string #{key} [#{locale}]")
+          end
+          # The 1.0 disclaimer only made sense while tips existed.
+          if value.match?(/ne débloque aucune fonctionnalité|unlocks no features/i)
+            error("obsolete tip disclaimer survives in string #{key} [#{locale}]")
+          end
+        end
+      end
+
+      %w[en-US fr-FR].each do |locale|
+        %w[description.txt promotional_text.txt release_notes.txt].each do |filename|
+          value = File.read(path("fastlane/metadata/#{locale}/#{filename}"), encoding: "UTF-8")
+          if value.match?(/pourboire|tip[s]?\b/i)
+            error("tip copy survives in fastlane/metadata/#{locale}/#{filename}")
+          end
+        end
+      end
+    end
+
+    # StoreKit 2 plumbing, plus the grandfathering rule that costs the most
+    # when it is wrong: the legacy signal must never be a key this version
+    # writes itself, and it must be read before any service writes anything.
+    def validate_store_service
+      store = File.read(path("NovaStationPinball/Services/StoreService.swift"), encoding: "UTF-8")
+      unless store.include?("Transaction.currentEntitlements") &&
+             store.include?("Transaction.updates") &&
+             store.include?("AppStore.sync()") &&
+             store.include?("Product.products(") &&
+             store.include?("displayName: product.displayName") &&
+             store.include?("displayPrice: product.displayPrice") &&
+             store.include?("transaction.revocationDate == nil")
+        error("the shipped store must use StoreKit 2 entitlements, updates, sync and Product metadata")
+      end
+      error("the sold product must be the decided one-time unlock") unless
+        store.include?('static let workshopProductID = "com.bnjdpn.NovaStationPinball.workshop"')
+      error("entitlement identifiers must never be dropped") unless
+        store.include?("static let entitlementProductIDs: Set<String>")
+      unless store.match?(/#if DEBUG.*?NOVA_STORE_FIXTURE.*?#endif/m) &&
+             store.match?(/#if DEBUG.*?struct UITestingWorkshopStoreBackend.*?#endif/m) &&
+             store.include?('arguments.contains("-ui-testing")') &&
+             store.include?('environment["NOVA_STORE_FIXTURE"] == "available"') &&
+             store.include?("return StoreKitWorkshopStoreBackend()")
+        error("the store fixture must be DEBUG-only, double-gated, and default to StoreKit")
+      end
+      unless store.include?('arguments.contains("-paywall-screenshot")') &&
+             store.match?(/guard !arguments\.contains\("-paywall-screenshot"\) else \{ return false \}/)
+        error("the paywall capture must never run with the store bypass enabled")
+      end
+
+      keys = store[/static let usageSignalKeys: \[String\] = \[(.*?)\]/m, 1].to_s
+      error("the grandfathering signal must read real 1.0 usage keys") unless
+        keys.include?("nova-station.high-scores") && keys.include?("nova-station.settings")
+      %w[NovaStation.founder NovaStation.founderMigrationCompleted].each do |own_key|
+        error("the legacy signal must never include a key this version writes (#{own_key})") if keys.include?(own_key)
+      end
+      unless store.include?("guard !userDefaults.bool(forKey: Keys.migrationCompleted) else { return }") &&
+             store.include?("userDefaults.set(true, forKey: Keys.migrationCompleted)")
+        error("grandfathering migration must run exactly once per install")
+      end
+      if store.match?(/userDefaults\.set\(false, forKey: Keys\.founder\)|removeObject\(forKey: Keys\.founder\)/)
+        error("a granted founder entitlement must never be revoked")
+      end
+
+      app_entry = File.read(path("NovaStationPinball/App/NovaStationPinballApp.swift"), encoding: "UTF-8")
+      migrate = app_entry.index("LegacyEntitlement.migrateIfNeeded()")
+      build_model = app_entry.index("State(initialValue: AppModel())")
+      unless migrate && build_model && migrate < build_model
+        error("grandfathering must be resolved in the app initializer, before any service is built")
+      end
+      if app_entry.match?(/@State\s+private\s+var\s+model\s*=\s*AppModel\(\)/)
+        error("a stored-property default would build AppModel before the grandfathering check")
+      end
+
+      tests = File.read(path("NovaStationPinballTests/StoreServiceTests.swift"), encoding: "UTF-8")
+      %w[
+        testAFreshInstallIsNotAFounderAfterEveryServiceHasStarted
+        testAnInstallWithEarlierUsageDataIsAFounder
+        testMigrationIsIdempotent
+        testGrantedAccessIsNeverRevoked
+      ].each do |name|
+        error("mandatory grandfathering test #{name} is missing") unless tests.include?("func #{name}")
+      end
+    end
+
+    # Grammatical number, in every locale, for every string that prints a
+    # count — checked structurally so a future edit cannot silently drop the
+    # variations and ship "1 attempts" again.
+    def validate_plural_strings
+      catalog = JSON.parse(File.read(path("NovaStationPinball/Resources/Localizable.xcstrings"), encoding: "UTF-8"))
+      strings = catalog.fetch("strings")
+
+      COUNT_STRINGS.each do |key, argument_number|
+        entry = strings[key]
+        unless entry
+          error("missing localized string #{key}")
+          next
+        end
+        %w[en fr].each do |locale|
+          localization = entry.dig("localizations", locale)
+          unless localization
+            error("count string #{key} is missing the #{locale} localization")
+            next
+          end
+          substitutions = localization["substitutions"] || {}
+          name, substitution = substitutions.find do |_, value|
+            value["argNum"] == argument_number
+          end
+          unless substitution
+            error("count string #{key} [#{locale}] must vary by plural on argument #{argument_number}")
+            next
+          end
+          value = localization.dig("stringUnit", "value").to_s
+          error("count string #{key} [#{locale}] never substitutes %#@#{name}@") unless value.include?("%\#@#{name}@")
+          plural = substitution.dig("variations", "plural") || {}
+          one = plural.dig("one", "stringUnit", "value").to_s
+          other = plural.dig("other", "stringUnit", "value").to_s
+          if one.strip.empty? || other.strip.empty?
+            error("count string #{key} [#{locale}] is missing a one or other plural category")
+          elsif one == other
+            error("count string #{key} [#{locale}] has an identical singular and plural form")
+          end
+        end
+      end
+
+      # A number immediately followed by a word is a count in a sentence: it
+      # belongs to the registry above, whatever locale spells it out.
+      strings.each do |key, entry|
+        next if COUNT_STRINGS.key?(key)
+        entry.fetch("localizations", {}).each do |locale, localization|
+          value = localization.dig("stringUnit", "value").to_s
+          next unless value.match?(/%(?:\d+\$)?lld\s+[[:alpha:]]+s\b/)
+          error("string #{key} [#{locale}] prints a count without plural variations")
+        end
+      end
+
+      localization_tests = File.read(
+        path("NovaStationPinballTests/LocalizationContractTests.swift"),
+        encoding: "UTF-8"
+      )
+      unless localization_tests.include?("stringsdict") &&
+             localization_tests.include?("testCountStringsAreGrammaticalAtOneAndAtManyInEveryLocale")
+        error("plural forms must be asserted against the compiled catalog by a test")
+      end
+    end
+
+    def validate_workshop_ui(root_view)
+      %w[workshopOpen workshop workshopClose workshopUnlock workshopStatus
+         workshopDrillHUD workshopDrillStatus workshopDrillRecord
+         workshopDrillRetry workshopDrillExit].each do |identifier|
+        error("Workshop UI is missing stable identifier #{identifier}") unless
+          root_view.include?(%Q{"#{identifier}"})
+      end
+      unless root_view.include?('"workshopRewind.\(target.identifier)"') &&
+             root_view.include?('"workshopDrill.\(drill.id)"')
+        error("Workshop UI must derive stable identifiers from the exact rewind and drill catalogs")
+      end
+      unless root_view.include?("ShotDrillCatalog.drills") &&
+             root_view.include?("model.canRewind(to: target)") &&
+             root_view.include?("model.drillEntry(for: drill)")
+        error("Workshop UI must render the real drill catalog and the real rewind availability")
+      end
+      unless root_view.include?("workshop.message.no_keyframe")
+        error("Workshop UI must design the empty state where nothing has been recorded yet")
+      end
+
+      # A drill the player paid for has to be a loop, not a one-way door: the
+      # attempt shows its own budget and verdict, and both ways out are on
+      # screen while it runs.
+      unless root_view.include?("model.activeDrill") &&
+             root_view.include?("model.activeDrillOutcome") &&
+             root_view.include?("model.activeDrillRemainingSeconds")
+        error("Workshop UI must render the live attempt state of the running drill")
+      end
+      unless root_view.include?("model.restartActiveDrill()") && root_view.include?("model.endDrill()")
+        error("a running drill must expose an explicit retry and an explicit exit")
+      end
+      %w[drill.hud.remaining drill.hud.succeeded drill.hud.failed drill.hud.retry drill.hud.exit].each do |key|
+        error("drill attempt UI is missing localized string #{key}") unless root_view.include?(key)
+      end
+
+      ui_tests = File.read(path("NovaStationPinballUITests/LayoutUITests.swift"), encoding: "UTF-8")
+      %w[workshopOpen workshopClose workshopRewind. workshopDrill. paywallPurchase paywallRestore
+         workshopDrillHUD workshopDrillStatus workshopDrillRetry workshopDrillExit].each do |identifier|
+        error("Workshop UI test is missing #{identifier}") unless ui_tests.include?(identifier)
+      end
+      unless ui_tests.match?(/workshopDrillRetry.*?\n.*?wait\(for:/m) &&
+             ui_tests.include?("exists == false")
+        error("a UI test must drive one drill attempt to its verdict, retry it and leave it")
+      end
+      audit_tests = File.read(
+        path("NovaStationPinballUITests/AccessibilityAuditUITests.swift"),
+        encoding: "UTF-8"
+      )
+      unless audit_tests.include?("workshopDrillHUD") &&
+             audit_tests.include?("UICTContentSizeCategoryAccessibilityXXXL") &&
+             audit_tests.include?("performStrictAccessibilityAudit")
+        error("the drill panel must be audited and checked at the largest accessibility text size")
+      end
+      integration_tests = File.read(
+        path("NovaStationPinballTests/AppModelRuntimeIntegrationTests.swift"),
+        encoding: "UTF-8"
+      )
+      unless integration_tests.include?("restartActiveDrill()") &&
+             integration_tests.include?("activeDrillRemainingSeconds") &&
+             integration_tests.include?("endDrill()")
+        error("the drill loop must be covered start to exit by a runtime integration test")
+      end
+      unless ui_tests.include?('app.buttons["workshopClose"].frame.width') &&
+             ui_tests.include?('app.otherElements["art.frame.4x3"].exists')
+        error("Workshop modal must hide background accessibility and expose a tested 44pt close target")
+      end
+    end
+
+    # The App Store Connect review capture is the one artefact of this release
+    # that states a price in pixels, and the only one App Review looks at
+    # before deciding the in-app purchase exists at all. Three ways of getting
+    # it wrong are already documented across the portfolio:
+    #
+    #   * a capture of an empty paywall — spinner, "unavailable", "Try Again" —
+    #     earns the rejection "we were unable to locate the in-app purchase";
+    #   * a capture whose price comes from the live App Store catalogue states
+    #     whatever App Store Connect happens to carry, not what this repository
+    #     sells (a BrewMeter capture shipped "$29.99" against a 6,99 € spec);
+    #   * a capture sitting in a gitignored folder proves nothing: it vanishes
+    #     at the first clone.
+    #
+    # So the contract checks the route AND the artefact: the UI test drives
+    # StoreKit through SKTestSession pinned to the base territory, and the PNG
+    # committed next to its sidecar must actually show the price the products
+    # manifest promises.
+    PAYWALL_CAPTURE_TEST = "NovaStationPinballUITests/PaywallReviewUITests.swift"
+    CURRENCY_SYMBOLS = { "€" => "EUR", "$" => "USD", "£" => "GBP", "¥" => "JPY" }.freeze
+
+    def validate_paywall_review_capture
+      review_test = File.read(path(PAYWALL_CAPTURE_TEST), encoding: "UTF-8")
+      xcode_project = File.read(path("NovaStationPinball.xcodeproj/project.pbxproj"), encoding: "UTF-8")
+      unless review_test.include?('"-paywall-screenshot"') &&
+             review_test.include?("XCUIScreen.main.screenshot()") &&
+             review_test.include?("screenshot.image.cgImage") &&
+             review_test.include?("[2064, 2752]") &&
+             !review_test.include?("purchaseButton.tap()") &&
+             xcode_project.include?("PaywallReviewUITests.swift in Sources")
+        error("IAP review capture must be compiled, full-screen, pixel-validated at 2752x2064, and non-purchasing")
+      end
+
+      # The price has to be a function of this repository, not of the store the
+      # simulator happens to talk to.
+      unless review_test.include?("import StoreKitTest") &&
+             review_test.include?('SKTestSession(configurationFileNamed: "NovaStationPinball")') &&
+             review_test.include?("session.storefront = Self.baseTerritory")
+        error("IAP review capture must price the offer from the .storekit catalogue, pinned to the base territory")
+      end
+      if review_test.include?("NOVA_STORE_FIXTURE")
+        error("IAP review capture must not photograph a fixture: a hard-coded price cannot disagree with the spec")
+      end
+      # An empty paywall is the documented rejection. The test must refuse both
+      # of its states rather than screenshot whatever is on screen.
+      unless review_test.include?("paywallOfferLoading") && review_test.include?("paywallOfferUnavailable")
+        error("IAP review capture must fail on the loading and unavailable paywall states")
+      end
+      unless review_test.include?('XCTAssertFalse(app.staticTexts["paywallStatus"].exists)')
+        error("IAP review capture must prove the offer is not already owned")
+      end
+
+      project = YAML.safe_load(File.read(path("project.yml"), encoding: "UTF-8"), aliases: false)
+      ui_sources = project.fetch("targets").fetch("NovaStationPinballUITests").fetch("sources")
+      ships_catalogue = ui_sources.any? do |source|
+        source.is_a?(Hash) &&
+          source["path"] == "NovaStationPinball/StoreKit/NovaStationPinball.storekit" &&
+          source["buildPhase"] == "resources"
+      end
+      unless ships_catalogue
+        error("the UI test bundle must ship the .storekit catalogue: SKTestSession loads it from there, " \
+              "and the scheme's storeKitConfiguration only covers the Run action")
+      end
+
+      error("missing scripts/capture_paywall_review_screenshot.rb") unless
+        File.file?(path("scripts/capture_paywall_review_screenshot.rb"))
+
+      validate_paywall_review_asset
+    end
+
+    def validate_paywall_review_asset
+      manifest = JSON.parse(File.read(path("fastlane/pro_products.json"), encoding: "UTF-8"))
+      product = manifest.fetch("products").first
+      declared = product["review_screenshot"].to_s
+      if declared.empty?
+        error("pro_products.json must declare review_screenshot: App Store Connect refuses a new " \
+              "in-app purchase without a capture of the purchase screen")
+        return
+      end
+
+      png = path(declared)
+      unless File.file?(png)
+        error("declared review screenshot is missing: #{declared}; run `bundle exec fastlane paywall_review_screenshot`")
+        return
+      end
+      error("review screenshot is not a PNG: #{declared}") unless File.binread(png, 8) == "\x89PNG\r\n\x1a\n".b
+
+      sidecar = png.sub(/\.png\z/, ".json")
+      unless File.file?(sidecar)
+        error("missing review capture sidecar next to #{declared}; run `bundle exec fastlane paywall_review_screenshot`")
+        return
+      end
+
+      payload = JSON.parse(File.read(sidecar, encoding: "UTF-8"))
+      actual = Digest::SHA256.hexdigest(File.binread(png))
+      unless payload["screenshot_sha256"] == actual
+        error("the review capture sidecar describes a different image than the one committed " \
+              "(#{payload['screenshot_sha256']} vs #{actual}); recapture instead of editing the sidecar")
+        return
+      end
+      error("the review capture sidecar names another product") unless
+        payload["product_id"] == product.fetch("product_id")
+      error("the review capture must be pinned to the base territory") unless
+        payload["storefront"] == manifest.fetch("base_territory")
+
+      displayed = payload["displayed_price"].to_s
+      amount, currency = parse_displayed_price(displayed)
+      expected_amount = format("%.2f", Float(product.fetch("base_price")))
+      expected_currency = manifest.fetch("base_currency")
+      if amount.nil?
+        error("cannot read a price out of the review capture sidecar: #{displayed.inspect}")
+      elsif amount != expected_amount || currency != expected_currency
+        error("the review capture shows #{displayed.inspect} (#{amount} #{currency}) but pro_products.json " \
+              "sells at #{expected_amount} #{expected_currency}: App Review would be shown a price the " \
+              "App Store does not have")
+      end
+    end
+
+    # "€4.99", "4,99 €", "EUR 4.99" -> ["4.99", "EUR"].
+    def parse_displayed_price(text)
+      symbol = CURRENCY_SYMBOLS.keys.find { |candidate| text.include?(candidate) }
+      currency = symbol ? CURRENCY_SYMBOLS.fetch(symbol) : text[/\b(EUR|USD|GBP|JPY)\b/, 1]
+      digits = text[/\d+(?:[.,]\d{1,2})?/]
+      return [nil, currency] if digits.nil?
+
+      [format("%.2f", Float(digits.tr(",", "."))), currency]
+    end
+
+    # Guideline 3.1.2(a) for a one-time unlock: price read from the product,
+    # explicit non-subscription wording, restore, terms and privacy.
+    def validate_paywall_ui(root_view)
+      %w[paywall paywallTitle paywallClose paywallPurchase paywallRestore paywallTerms
+         paywallTermsLink paywallPrivacyLink paywallStatus].each do |identifier|
+        error("paywall is missing stable identifier #{identifier}") unless
+          root_view.include?(%Q{"#{identifier}"})
+      end
+      unless root_view.include?("offer.displayPrice") && root_view.include?("offer.displayName")
+        error("paywall must read its name and price from StoreKit.Product")
+      end
+      if root_view.match?(/(?:USD|EUR|\$\s*\d|\d+[.,]\d{2}\s*€)/)
+        error("paywall must not hard-code prices or currencies")
+      end
+      unless root_view.include?("WorkshopCatalog.termsOfUseURL") &&
+             root_view.include?("WorkshopCatalog.privacyURL")
+        error("paywall must link the terms of use and the privacy policy")
+      end
+      store = File.read(path("NovaStationPinball/Services/StoreService.swift"), encoding: "UTF-8")
+      unless store.include?('static let termsOfUseURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"') &&
+             store.include?('static let privacyURL = "https://bnjdpn.github.io/NovaStationPinball/privacy.html"')
+        error("paywall legal links must be the Apple standard EULA and the app privacy page")
+      end
+      unless root_view.include?("paywall.loading") && root_view.include?("paywall.unavailable")
+        error("paywall must design its loading and no-product states")
+      end
+
+      catalog = JSON.parse(File.read(path("NovaStationPinball/Resources/Localizable.xcstrings"), encoding: "UTF-8"))
+      strings = catalog.fetch("strings")
+      required_keys = %w[
+        paywall.title paywall.body paywall.one_time paywall.restore paywall.link.terms
+        paywall.link.privacy paywall.loading paywall.unavailable paywall.free_forever
+        workshop.title workshop.unlock workshop.rewind.remaining workshop.message.no_keyframe
+      ] + ShotDrillIdentifiers.all.map { |id| "drill.#{id}" }
+      required_keys.each do |key|
+        entry = strings[key]
+        unless entry
+          error("missing localized string #{key}")
+          next
+        end
+        %w[en fr].each do |locale|
+          value = entry.dig("localizations", locale, "stringUnit", "value").to_s
+          error("string #{key} is not translated in #{locale}") if value.strip.empty?
+        end
+      end
+      disclosure_en = strings.dig("paywall.one_time", "localizations", "en", "stringUnit", "value").to_s
+      disclosure_fr = strings.dig("paywall.one_time", "localizations", "fr", "stringUnit", "value").to_s
+      unless disclosure_en.match?(/one-time purchase/i) && disclosure_en.match?(/not a subscription/i)
+        error("the English paywall must state that the purchase is one-time and not a subscription")
+      end
+      unless disclosure_fr.match?(/achat unique/i) && disclosure_fr.match?(/pas un abonnement/i)
+        error("the French paywall must state that the purchase is one-time and not a subscription")
+      end
+
+      validate_paywall_review_capture
+
+      media = File.read(path("NovaStationPinball/App/MediaScenario.swift"), encoding: "UTF-8")
+      unless media.include?('opensPaywall = arguments.contains("-paywall-screenshot")') &&
+             root_view.include?("openLaunchPaywallIfRequested()")
+        error("-paywall-screenshot must open the paywall at launch for the capture pipelines")
+      end
+
+      background_is_conditional = root_view.match?(
+        /if activeOverlay == nil \{\s+Rectangle\(\)\.fill\(\.clear\).*?"art\.frame\.4x3".*?HStack\(spacing: 0\).*?"art\.table".*?"art\.console"/m
+      )
+      unless background_is_conditional &&
+             root_view.scan(".accessibilityAddTraits(.isModal)").length >= 3 &&
+             root_view.include?(".frame(width: 44, height: 44)")
+        error("every modal must hide background accessibility and expose a 44pt close target")
+      end
+    end
+
+    # Rewinding is assistance: a run that used it never reaches the ranked
+    # board or Game Center.
+    def validate_leaderboard_integrity(app_model)
+      unless app_model.include?("guard !isAssistedRun, !scene.isAssisted else {") &&
+             app_model.include?("localGameStore.saveTrainingScores(trainingScores)")
+        error("assisted runs must be routed to the separate training board")
+      end
+      assisted_guard = app_model.index("guard !isAssistedRun, !scene.isAssisted else {")
+      submit = app_model.index("gameCenterClient.submit")
+      unless assisted_guard && submit && assisted_guard < submit
+        error("the assisted guard must precede any Game Center submission")
+      end
+      session = File.read(path("NovaStationCore/Sources/NovaStationCore/GameSession.swift"), encoding: "UTF-8")
+      unless session.include?("public private(set) var isAssisted = false") &&
+             session.include?("session.isAssisted = true") &&
+             session.include?("isAssisted = false")
+        error("the assisted flag must be owned by the core session and cleared only by a new game")
+      end
+      store = File.read(path("NovaStationPinball/Services/LocalGameStore.swift"), encoding: "UTF-8")
+      unless store.include?('static let trainingScores = "nova-station.training-scores"') &&
+             store.include?('static let drillProgress = "nova-station.drill-progress"') &&
+             store.include?('static let assistedSession = "nova-station.assisted-session"')
+        error("the Workshop stores must live under their own new keys")
+      end
+      unless store.include?("private func quarantineCheckpoint()") &&
+             store.include?("active-checkpoint.bak")
+        error("an unreadable saved game must be quarantined, never destroyed")
+      end
     end
 
     def validate_support_page
@@ -613,10 +1168,12 @@ module NovaStationPinballReleaseContract
   end
 end
 
-errors = NovaStationPinballReleaseContract::Verifier.new.verify
-if errors.empty?
-  puts "release_contract: OK"
-else
-  errors.each { |error| warn "release_contract: #{error}" }
-  exit 1
+if $PROGRAM_NAME == __FILE__
+  errors = NovaStationPinballReleaseContract::Verifier.new.verify
+  if errors.empty?
+    puts "release_contract: OK"
+  else
+    errors.each { |error| warn "release_contract: #{error}" }
+    exit 1
+  end
 end

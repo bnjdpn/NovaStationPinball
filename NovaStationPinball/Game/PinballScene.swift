@@ -67,8 +67,8 @@ final class PinballScene: SKScene {
         previousUpdateTime = currentTime
         let input = model.takeSimulationInput()
         let result = driver.advance(elapsed: elapsed, input: input)
-        model.receive(sessionFrame: result.sessionFrame)
-        render(sessionFrame: result.sessionFrame, input: input.continuous)
+        model.receive(sessionFrame: result.sessionFrame, steps: result.stepsExecuted)
+        render(sessionFrame: result.sessionFrame, input: driver.isReviewing ? .idle : input.continuous)
     }
 
     var currentSnapshot: SimulationSnapshot { driver.snapshot }
@@ -77,6 +77,51 @@ final class PinballScene: SKScene {
     var currentReplay: Replay { driver.recording }
     var currentCheckpoint: GameSessionCheckpoint { driver.checkpoint }
     var currentSessionFrame: GameSessionFrame { driver.currentSessionFrame }
+
+    var isAssisted: Bool { driver.isAssisted }
+    var isReviewing: Bool { driver.isReviewing }
+
+    func canRewind(to target: RewindTarget) -> Bool {
+        driver.canRewind(to: target)
+    }
+
+    /// Restores a recorded keyframe and gives the table straight back to the
+    /// player at that instant.
+    @discardableResult
+    func rewind(to target: RewindTarget) throws -> GameSessionFrame {
+        let frame = try driver.rewind(to: target)
+        previousUpdateTime = nil
+        render(sessionFrame: frame, input: .idle)
+        return frame
+    }
+
+    /// Replays the player's own recorded inputs from a keyframe.
+    @discardableResult
+    func beginReview(from target: RewindTarget, speed: Double) throws -> GameSessionFrame {
+        let frame = try driver.beginReview(from: target, speed: speed)
+        previousUpdateTime = nil
+        render(sessionFrame: frame, input: .idle)
+        return frame
+    }
+
+    func endReview() {
+        driver.endReview()
+        previousUpdateTime = nil
+    }
+
+    func markAssisted() {
+        driver.markAssisted()
+    }
+
+    /// Serves the identical drill session. Every attempt starts here.
+    @discardableResult
+    func startDrill(_ drill: ShotDrill) throws -> GameSessionFrame {
+        driver.replaceSession(try ShotDrillCatalog.makeSession())
+        previousUpdateTime = nil
+        let frame = driver.currentSessionFrame
+        render(sessionFrame: frame, input: .idle)
+        return frame
+    }
 
     @discardableResult
     func startNewGame() -> GameSessionFrame {

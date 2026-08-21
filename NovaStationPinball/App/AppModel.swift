@@ -22,6 +22,9 @@ final class AppModel {
         case multiball
         case tilt
         case gameOver
+        case rewound
+        case reviewing
+        case drill
 
         var localizedText: String {
             switch self {
@@ -38,6 +41,9 @@ final class AppModel {
             case .multiball: String(localized: "status.multiball")
             case .tilt: String(localized: "status.tilt")
             case .gameOver: String(localized: "status.game_over")
+            case .rewound: String(localized: "status.rewound")
+            case .reviewing: String(localized: "status.reviewing")
+            case .drill: String(localized: "status.drill")
             }
         }
     }
@@ -59,12 +65,49 @@ final class AppModel {
     private let hapticsService: any PinballHapticsService
     private let gameCenterClient: any GameCenterClient
     private let localGameStore: LocalGameStore
-    private let tipJarSupport: any TipJarSupport
     private let mediaLaunchConfiguration: MediaLaunchConfiguration
     private var didStartOptionalServices = false
     private var gameCompletionGate = GameCompletionGate()
     private(set) var mediaScenario: MediaScenario?
     var runsMediaPreviewSequence: Bool { mediaLaunchConfiguration.runsPreviewSequence }
+
+    // MARK: - Workshop
+
+    let store: StoreService
+    private(set) var rewindsUsedThisGame = 0
+    private(set) var drillProgress = DrillProgress()
+    private(set) var activeDrill: ShotDrill?
+    private(set) var activeDrillOutcome = ShotDrillEvaluator.Outcome.running
+    /// Seconds left in the attempt on screen. Written once per whole second so
+    /// the countdown drives the HUD without re-rendering it 240 times a second.
+    private(set) var activeDrillRemainingSeconds = 0
+    private var drillEvaluator: ShotDrillEvaluator?
+    /// True as soon as this run used a rewind, a review or a drill.
+    private(set) var isAssistedRun = false
+    var opensPaywallOnLaunch: Bool { mediaLaunchConfiguration.opensPaywall }
+
+    var hasWorkshop: Bool { store.hasWorkshop }
+    /// Device already played Nova Station before the Workshop existed. It only
+    /// ever adds free rewinds, and is disclosed in the Workshop sheet as the
+    /// device-local flag it is.
+    var isFounder: Bool { store.isFounder }
+    var isReviewingBall: Bool { scene.isReviewing }
+    var freeRewindsPerGame: Int { store.freeRewindsPerGame }
+    var remainingFreeRewinds: Int { max(0, freeRewindsPerGame - rewindsUsedThisGame) }
+    var canUseAnotherRewind: Bool { hasWorkshop || remainingFreeRewinds > 0 }
+
+    func canRewind(to target: RewindTarget) -> Bool {
+        scene.canRewind(to: target)
+    }
+
+    func drillEntry(for drill: ShotDrill) -> DrillProgressEntry {
+        drillProgress.entry(for: drill.id)
+    }
+
+    /// True while the attempt currently on the table is still undecided.
+    var isRunningDrillAttempt: Bool {
+        activeDrill != nil && activeDrillOutcome == .running
+    }
 
     @ObservationIgnored lazy var scene = PinballScene(model: self)
     @ObservationIgnored lazy var lifecycleCoordinator = LifecycleCoordinator(
@@ -87,20 +130,22 @@ final class AppModel {
         hapticsService: any PinballHapticsService = CoreHapticsService(),
         gameCenterClient: any GameCenterClient = GameKitGameCenterClient(),
         localGameStore: LocalGameStore = .applicationDefault(),
-        tipJarSupport: any TipJarSupport = TipJarSupportFactory.applicationDefault(),
+        store: StoreService = StoreService(),
         mediaLaunchConfiguration: MediaLaunchConfiguration = .current
     ) {
         self.audioEngine = audioEngine
         self.hapticsService = hapticsService
         self.gameCenterClient = gameCenterClient
         self.localGameStore = localGameStore
-        self.tipJarSupport = tipJarSupport
+        self.store = store
         self.mediaLaunchConfiguration = mediaLaunchConfiguration
         mediaScenario = mediaLaunchConfiguration.scenario
         if let mediaScenario, let session = try? mediaScenario.makeSession() {
             rulesState = session.rules
             gamePhase = session.phase
         }
+        drillProgress = (try? localGameStore.loadDrillProgress()) ?? DrillProgress()
+        isAssistedRun = localGameStore.isAssistedSessionMarked
     }
 
     func apply(_ events: [PinballControlEvent]) {
@@ -116,8 +161,7 @@ final class AppModel {
                 gameStatus = pull > 0 ? .plungerCharging : .systemReady
             case .plungerReleased(let strength):
                 if gamePhase != .playing {
-                    gameCompletionGate.startNewGame()
-                    receive(sessionFrame: scene.startNewGame())
+                    beginFreshGame()
                 }
                 continuousInput.plungerPull = 0
                 pendingCommands.append(.releasePlunger(strength: strength))
@@ -148,6 +192,8 @@ final class AppModel {
         guard !didStartOptionalServices else { return }
         didStartOptionalServices = true
         gameCenterClient.authenticate()
+        store.start()
+        if isAssistedRun { scene.markAssisted() }
     }
 
     func start() {
@@ -250,9 +296,10 @@ final class AppModel {
         apply([.nudge(x: 0.35)])
     }
 
-    func receive(sessionFrame: GameSessionFrame) {
+    func receive(sessionFrame: GameSessionFrame, steps: Int = 1) {
         rulesState = sessionFrame.rules
         gamePhase = sessionFrame.phase
+        advanceDrill(with: sessionFrame, steps: steps)
 
         for effect in sessionFrame.effects {
             switch effect {
@@ -274,7 +321,7 @@ final class AppModel {
             }
         }
 
-        guard gameCompletionGate.shouldRecord(phase: gamePhase) else { return }
+        guard activeDrill == nil, gameCompletionGate.shouldRecord(phase: gamePhase) else { return }
         let entry = HighScoreEntry(
             identifier: UUID().uuidString,
             playerName: "NOVA",
@@ -284,8 +331,18 @@ final class AppModel {
         try? recordCompletedGame(entry)
     }
 
-    /// Records the authoritative local result before making a best-effort Game Center submission.
+    /// Records the authoritative local result before making a best-effort Game
+    /// Center submission. A run that used the Workshop is ranked on the
+    /// separate training board and is never submitted anywhere: rewinding is
+    /// assistance, and the ladder has to stay honest.
     func recordCompletedGame(_ entry: HighScoreEntry) throws {
+        guard !isAssistedRun, !scene.isAssisted else {
+            var trainingScores = try localGameStore.loadTrainingScores()
+            trainingScores.removeAll(where: { $0.identifier == entry.identifier })
+            trainingScores.append(entry)
+            try localGameStore.saveTrainingScores(trainingScores)
+            return
+        }
         var scores = try localGameStore.loadHighScores()
         scores.removeAll(where: { $0.identifier == entry.identifier })
         scores.append(entry)
@@ -296,12 +353,134 @@ final class AppModel {
         gameCenterClient.submit(score: entry.score)
     }
 
-    func availableTips() async -> [AvailableTip] {
-        await tipJarSupport.availableTips()
+    // MARK: - Workshop actions
+
+    enum WorkshopRequestOutcome: Equatable {
+        case done
+        /// The free allowance for this game is spent; show the paywall.
+        case needsWorkshop
+        /// Nothing has been recorded that far back yet.
+        case noKeyframe
     }
 
-    func purchaseTip(productIdentifier: String) async -> TipPurchaseOutcome {
-        await tipJarSupport.purchase(productIdentifier: productIdentifier)
+    /// Rewinds the ball to a recorded keyframe and gives control straight
+    /// back. Costs one of the free rewinds unless the Workshop is owned.
+    @discardableResult
+    func rewind(to target: RewindTarget) -> WorkshopRequestOutcome {
+        guard canUseAnotherRewind else { return .needsWorkshop }
+        guard scene.canRewind(to: target) else { return .noKeyframe }
+        do {
+            let frame = try scene.rewind(to: target)
+            if !hasWorkshop { rewindsUsedThisGame += 1 }
+            markRunAssisted()
+            receive(sessionFrame: frame)
+            gameStatus = .rewound
+            return .done
+        } catch {
+            return .noKeyframe
+        }
+    }
+
+    /// Replays the player's own inputs from a keyframe. Reviewing the current
+    /// ball is free for everyone; reviewing further back is part of the
+    /// Workshop.
+    @discardableResult
+    func reviewBall(from target: RewindTarget, speed: Double) -> WorkshopRequestOutcome {
+        if target != .ballStart && !hasWorkshop { return .needsWorkshop }
+        guard scene.canRewind(to: target) else { return .noKeyframe }
+        do {
+            let frame = try scene.beginReview(from: target, speed: speed)
+            markRunAssisted()
+            receive(sessionFrame: frame)
+            gameStatus = .reviewing
+            return .done
+        } catch {
+            return .noKeyframe
+        }
+    }
+
+    /// Takes the table back at the exact instant currently on screen.
+    func resumeFromReview() {
+        scene.endReview()
+        gameStatus = .systemReady
+    }
+
+    /// Starts a drill. Every attempt serves the identical state.
+    @discardableResult
+    func startDrill(_ drill: ShotDrill) -> WorkshopRequestOutcome {
+        guard hasWorkshop else { return .needsWorkshop }
+        do {
+            let frame = try scene.startDrill(drill)
+            let evaluator = ShotDrillEvaluator(drill: drill)
+            activeDrill = drill
+            drillEvaluator = evaluator
+            activeDrillOutcome = .running
+            activeDrillRemainingSeconds = Self.seconds(fromTicks: evaluator.remainingTicks)
+            gameCompletionGate.startNewGame()
+            markRunAssisted()
+            receive(sessionFrame: frame)
+            gameStatus = .drill
+            return .done
+        } catch {
+            return .noKeyframe
+        }
+    }
+
+    /// Serves the very same drill again, from the very same position. This is
+    /// the control the player reaches for after an attempt is decided.
+    @discardableResult
+    func restartActiveDrill() -> WorkshopRequestOutcome {
+        guard let drill = activeDrill else { return .noKeyframe }
+        return startDrill(drill)
+    }
+
+    /// Leaves the Workshop and returns the table to the launch screen.
+    func endDrill() {
+        guard activeDrill != nil else { return }
+        activeDrill = nil
+        drillEvaluator = nil
+        activeDrillOutcome = .running
+        activeDrillRemainingSeconds = 0
+        beginFreshGame()
+    }
+
+    private func beginFreshGame() {
+        gameCompletionGate.startNewGame()
+        rewindsUsedThisGame = 0
+        isAssistedRun = false
+        localGameStore.setAssistedSessionMarked(false)
+        activeDrill = nil
+        drillEvaluator = nil
+        activeDrillOutcome = .running
+        activeDrillRemainingSeconds = 0
+        receive(sessionFrame: scene.startNewGame())
+        gameStatus = .systemReady
+    }
+
+    private func markRunAssisted() {
+        guard !isAssistedRun else { return }
+        isAssistedRun = true
+        localGameStore.setAssistedSessionMarked(true)
+    }
+
+    private func advanceDrill(with frame: GameSessionFrame, steps: Int) {
+        guard var evaluator = drillEvaluator, let drill = activeDrill else { return }
+        let outcome = evaluator.consume(frame, steps: steps)
+        drillEvaluator = evaluator
+        let remaining = Self.seconds(fromTicks: evaluator.remainingTicks)
+        if remaining != activeDrillRemainingSeconds { activeDrillRemainingSeconds = remaining }
+        guard outcome != .running, activeDrillOutcome == .running else { return }
+        activeDrillOutcome = outcome
+        drillProgress.record(drillID: drill.id, succeeded: outcome == .succeeded)
+        try? localGameStore.saveDrillProgress(drillProgress)
+    }
+
+    /// Rounds up, so a budget that still has a fraction of a second left never
+    /// reads as zero while the attempt is still live.
+    private static func seconds(fromTicks ticks: Int) -> Int {
+        guard ticks > 0 else { return 0 }
+        let ticksPerSecond = Int((1.0 / PinballSimulation.fixedTimeStep).rounded())
+        return (ticks + ticksPerSecond - 1) / max(1, ticksPerSecond)
     }
 
     private func emitOptionalEffects(audio audioCue: PinballAudioCue, haptic hapticCue: PinballHapticCue) {
