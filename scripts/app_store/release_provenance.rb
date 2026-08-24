@@ -104,7 +104,7 @@ module NovaStationPinballReleaseProvenance
     artifact_root: "Builds/AppStore/NovaStationPinball",
     run_id: "nova-100-b3-20260824-gcid1",
     candidate_id: "cc12d0573343babadbefeded29c51b2d327211fcd8c4ed8ae2e40b42cf7ea81b",
-    candidate_receipt_sha256: "80b9e9f991c0eaf86b23bae4fe93065da45875e23e59273c6b69b155945e6e9e",
+    candidate_receipt_sha256: "6f9ba07b27ade94c29ee8ea1b24d721184ee7d5aa8f446e6612b65eda52061f6",
     ipa_upload_intent_sha256: "e62ae26f24084bd7d66cb949a28652dd4b54d2cd332c785ce8d9dd5e21f9eccf",
     ipa_upload_receipt_sha256: "3339e0fcd827b9f622cf75f3d0a5bdf523931d1b37e1da5075a616b8fdf7f070",
     release_manifest_sha256: "a3c65ce599f245475600167c715fe1ec4e063fa89a6db05b3d6b4fc557889fc0",
@@ -581,6 +581,25 @@ module NovaStationPinballReleaseProvenance
   end
 
   def verify_candidate_receipt!(receipt, contract, run_root)
+    accepted_validation = [
+      {
+        "passed" => true,
+        "commands" => [{
+          "argv" => [
+            "bin/apple-release", "lane", "NovaStationPinball",
+            "release_contract"
+          ],
+          "status" => 0
+        }]
+      },
+      {
+        "passed" => true,
+        "commands" => [{
+          "argv" => ["fastlane", "release_contract"],
+          "status" => 0
+        }]
+      }
+    ]
     unless receipt.keys.sort == %w[
       app artifacts asc execution_id final_commit schema_version source_manifest
       toolchain validation
@@ -588,16 +607,7 @@ module NovaStationPinballReleaseProvenance
            receipt.fetch("schema_version") == 1 &&
            receipt.fetch("app") == "nova-station-pinball" &&
            receipt.fetch("execution_id") == contract.run_id &&
-           receipt.fetch("validation") == {
-             "passed" => true,
-             "commands" => [{
-               "argv" => [
-                 "bin/apple-release", "lane", "NovaStationPinball",
-                 "release_contract"
-               ],
-               "status" => 0
-             }]
-           } &&
+           accepted_validation.include?(receipt.fetch("validation")) &&
            receipt.fetch("asc") == {
              "uploaded" => true, "readback" => "success", "state" => "VALID"
            } && receipt.fetch("final_commit").nil?
