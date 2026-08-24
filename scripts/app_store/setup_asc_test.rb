@@ -452,8 +452,8 @@ class NovaStationPinballAscSetupTest < Minitest::Test
     assert_equal "gameCenterLeaderboards", body.dig(:data, :type)
     assert_equal "nova-station-high-score",
                  body.dig(:data, :attributes, :vendorIdentifier)
-    assert_equal 0, body.dig(:data, :attributes, :scoreRangeStart)
-    assert_equal 999_999_999, body.dig(:data, :attributes, :scoreRangeEnd)
+    assert_equal "0", body.dig(:data, :attributes, :scoreRangeStart)
+    assert_equal "999999999", body.dig(:data, :attributes, :scoreRangeEnd)
     version = body.dig(:data, :relationships, :versions, :data).fetch(0)
     assert_equal "gameCenterLeaderboardVersions", version.fetch(:type)
     assert_equal version.fetch(:id), body.fetch(:included).first.fetch(:id)
@@ -557,7 +557,7 @@ class NovaStationPinballAscSetupTest < Minitest::Test
     Dir.mktmpdir do |proof_root|
       identity = NovaStationPinballAscSetup.proof_identity(
         proof_root: proof_root,
-        key: "leaderboard-#{definition.fetch('id')}",
+        key: "leaderboard-#{definition.fetch('id')}-string-score-bounds",
         candidate_id: "a" * 64,
         version: CONFIG.fetch("version"),
         mutation_guard: -> {},
@@ -588,6 +588,43 @@ class NovaStationPinballAscSetupTest < Minitest::Test
 
       assert_empty client.posts
       refute File.exist?(identity.fetch(:receipt_path))
+    end
+  end
+
+  def test_exact_legacy_numeric_intent_is_not_replayed_before_corrected_create
+    client = ProvisionClient.new
+    definition = CONFIG.fetch("leaderboards").first
+    Dir.mktmpdir do |proof_root|
+      legacy = NovaStationPinballAscSetup.proof_identity(
+        proof_root: proof_root,
+        key: "leaderboard-#{definition.fetch('id')}",
+        candidate_id: "a" * 64,
+        version: CONFIG.fetch("version"),
+        mutation_guard: -> {},
+        release_identity: release_identity,
+        payload: {
+          "action" => "create_game_center_leaderboard_with_inline_version",
+          "detail_id" => "detail-1",
+          "vendor_identifier" => definition.fetch("id"),
+          "attributes" => NovaStationPinballAscSetup
+            .legacy_numeric_leaderboard_attributes(definition)
+            .transform_keys(&:to_s)
+        }
+      )
+      NovaStationPinballReleaseSupport.transport_once!(
+        **legacy.merge(preflight: nil)
+      ) {}
+
+      NovaStationPinballAscSetup.provision!(
+        client: client, config: CONFIG, proof_root: proof_root,
+        candidate_id: "a" * 64, mutation_guard: -> {},
+        release_identity: release_identity
+      )
+
+      assert_equal 1,
+                   client.posts.count { |path, _body| path == "/v2/gameCenterLeaderboards" }
+      assert File.exist?(legacy.fetch(:intent_path))
+      refute File.exist?(legacy.fetch(:receipt_path))
     end
   end
 

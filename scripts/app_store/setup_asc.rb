@@ -136,10 +136,19 @@ module NovaStationPinballAscSetup
       defaultFormatter: definition.fetch("default_formatter"),
       submissionType: definition.fetch("submission_type"),
       scoreSortType: definition.fetch("score_sort_type"),
-      scoreRangeStart: definition.fetch("score_range_start"),
-      scoreRangeEnd: definition.fetch("score_range_end"),
+      # Despite the schema calling these numbers, ASC v2 accepts leaderboard
+      # bounds as decimal strings. This also matches its GET representation.
+      scoreRangeStart: definition.fetch("score_range_start").to_s,
+      scoreRangeEnd: definition.fetch("score_range_end").to_s,
       visibility: "SHOW_FOR_ALL"
     }
+  end
+
+  def legacy_numeric_leaderboard_attributes(definition)
+    leaderboard_attributes(definition).merge(
+      scoreRangeStart: definition.fetch("score_range_start"),
+      scoreRangeEnd: definition.fetch("score_range_end")
+    )
   end
 
   def leaderboard_create_body(definition, detail_id, local_index)
@@ -240,6 +249,44 @@ module NovaStationPinballAscSetup
       payload: payload.merge("release" => release_identity),
       preflight: mutation_guard
     }
+  end
+
+  # A numeric-bounds request was attempted before ASC's string requirement was
+  # observed. Validate that immutable intent exactly, but never replay it. A
+  # corrected request uses a different proof key and only runs while the live
+  # catalogue remains empty.
+  def validate_legacy_numeric_leaderboard_intent!(proof_context, definition,
+                                                   detail_id)
+    key = "leaderboard-#{definition.fetch('id')}"
+    legacy = proof_identity(
+      **proof_context,
+      key: key,
+      payload: {
+        "action" => "create_game_center_leaderboard_with_inline_version",
+        "detail_id" => detail_id,
+        "vendor_identifier" => definition.fetch("id"),
+        "attributes" => legacy_numeric_leaderboard_attributes(definition)
+          .transform_keys(&:to_s)
+      }
+    )
+    intent_path = legacy.fetch(:intent_path)
+    return false unless File.exist?(intent_path) || File.symlink?(intent_path)
+    if File.exist?(legacy.fetch(:receipt_path)) ||
+       File.symlink?(legacy.fetch(:receipt_path))
+      raise SetupError,
+            "Legacy Game Center request is observed but its leaderboard is absent"
+    end
+
+    transport = legacy.reject { |key_name, _value| key_name == :preflight }
+    phase = NovaStationPinballReleaseSupport.transport_once!(
+      **transport, preflight: nil
+    ) { raise SetupError, "Legacy Game Center request must remain GET-only" }
+    unless phase == :get_only
+      raise SetupError, "Legacy Game Center intent is not safely recoverable"
+    end
+    true
+  rescue ArgumentError => error
+    raise SetupError, "Legacy Game Center intent differs: #{error.message}"
   end
 
   def apply_run_id!(explicit, environment = ENV)
@@ -531,9 +578,12 @@ module NovaStationPinballAscSetup
               "Game Center leaderboard is ambiguous: #{definition.fetch('id')}"
       end
       if matches.empty?
+        validate_legacy_numeric_leaderboard_intent!(
+          proof_context, definition, detail.fetch("id")
+        )
         proof = proof_identity(
           **proof_context,
-          key: "leaderboard-#{definition.fetch('id')}",
+          key: "leaderboard-#{definition.fetch('id')}-string-score-bounds",
           payload: {
             "action" => "create_game_center_leaderboard_with_inline_version",
             "detail_id" => detail.fetch("id"),
