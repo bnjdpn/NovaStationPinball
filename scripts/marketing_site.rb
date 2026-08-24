@@ -68,7 +68,7 @@ module PortfolioMarketingSite
       "independent_studio" => "More independent apps", "discover" => "Discover the app",
       "separate_apps" => "These are separate apps. They do not exchange data or make decisions for one another.",
       "human_support" => "Human support", "contact_heading" => "A question or something to report?",
-      "contact_intro" => "Send a message through the private support form. No developer email address is published.",
+      "contact_intro" => "Send a message through the private support form.",
       "email" => "Your email", "app_version" => "App version", "message" => "Message", "send" => "Send message",
       "sending" => "Sending…", "success" => "Message sent. Thank you.", "error" => "The message could not be sent. Please try again.",
       "independent_footer" => "An independently made app.", "legal" => "Legal links", "privacy" => "Privacy", "terms" => "Terms"
@@ -82,7 +82,7 @@ module PortfolioMarketingSite
       "independent_studio" => "D’autres apps indépendantes", "discover" => "Découvrir l’app",
       "separate_apps" => "Ces apps sont indépendantes. Elles n’échangent aucune donnée et ne prennent aucune décision l’une pour l’autre.",
       "human_support" => "Assistance humaine", "contact_heading" => "Une question ou quelque chose à signaler ?",
-      "contact_intro" => "Écrivez via le formulaire d’assistance privé. Aucune adresse e-mail du développeur n’est publiée.",
+      "contact_intro" => "Écrivez via le formulaire d’assistance privé.",
       "email" => "Votre e-mail", "app_version" => "Version de l’app", "message" => "Message", "send" => "Envoyer",
       "sending" => "Envoi…", "success" => "Message envoyé. Merci.", "error" => "Le message n’a pas pu être envoyé. Réessayez.",
       "independent_footer" => "Une app créée indépendamment.", "legal" => "Liens juridiques", "privacy" => "Confidentialité", "terms" => "Conditions"
