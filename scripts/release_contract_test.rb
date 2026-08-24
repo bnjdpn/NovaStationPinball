@@ -84,10 +84,42 @@ class ReleaseContractTest < Minitest::Test
     assert configured_products.all? { |product| product.fetch("type").match?(/\A[A-Z][A-Z0-9_]*\z/) }
     assert_equal "one_time_unlock", release_config.fetch("monetization_strategy").fetch("model")
     assert_equal "https://bnjdpn.github.io/NovaStationPinball/#contact", release_config.fetch("support_url")
+    leaderboard = release_config.fetch("leaderboards").fetch(0)
+    assert_equal ["nova-station-high-score"], release_config.fetch("leaderboard_ids")
+    assert_equal "nova-station-high-score", leaderboard.fetch("id")
+    assert_equal "Nova Station High Score", leaderboard.fetch("reference_name")
+    assert_equal "INTEGER", leaderboard.fetch("default_formatter")
+    assert_equal "BEST_SCORE", leaderboard.fetch("submission_type")
+    assert_equal "DESC", leaderboard.fetch("score_sort_type")
+    assert_equal 0, leaderboard.fetch("score_range_start")
+    score_source = File.read(
+      File.join(ROOT, "NovaStationCore/Sources/NovaStationCore/ScoreEngine.swift"),
+      encoding: "UTF-8"
+    )
+    score_literal = score_source[
+      /public static let maximumScore\s*=\s*([0-9_]+)/, 1
+    ]
+    refute_nil score_literal
+    assert_equal Integer(score_literal.delete("_"), 10),
+                 leaderboard.fetch("score_range_end")
+    assert_nil leaderboard.fetch("recurrence_start_date")
+    assert_nil leaderboard.fetch("recurrence_duration")
+    assert_nil leaderboard.fetch("recurrence_rule")
+    assert_equal %w[en-US fr-FR], leaderboard.fetch("localizations").keys.sort
+    assert_equal(
+      "Highest score from a standard game. Runs using Workshop tools are excluded.",
+      leaderboard.dig("localizations", "en-US", "description")
+    )
+    assert_equal(
+      "Meilleur score d’une partie standard. Les parties utilisant l’Atelier sont exclues.",
+      leaderboard.dig("localizations", "fr-FR", "description")
+    )
 
     fastfile = File.read(File.join(ROOT, "fastlane/Fastfile"), encoding: "UTF-8")
     REQUIRED_LANES.each { |lane| assert_match(/^\s*lane :#{lane}\b/, fastfile) }
     assert_includes fastfile, "scripts/release_contract.rb"
+    assert_includes fastfile,
+                    "scripts/app_store/rejected_submission_recovery_test.rb"
 
     public_contact_files.each do |path|
       contents = File.read(path, encoding: "UTF-8")
@@ -205,6 +237,7 @@ class ReleaseContractTest < Minitest::Test
     fastlane/Fastfile
     scripts/app_store/iap_status.rb
     scripts/app_store/iap_sync.rb
+    scripts/app_store/rejected_submission_recovery.rb
     scripts/app_store/review_submission.rb
     scripts/app_store/status.rb
   ].freeze
@@ -232,6 +265,17 @@ class ReleaseContractTest < Minitest::Test
       refute_match(/(?:NON_)?CONSUMABLE/, source, relative)
       refute_match(/\btips?\b/i, source, relative)
     end
+
+    submit = File.read(
+      File.join(ROOT, "scripts/app_store/review_submission.rb"), encoding: "UTF-8"
+    )
+    assert_includes submit, "RetiredIapReadback.exact!"
+    recovery = File.read(
+      File.join(ROOT, "scripts/app_store/rejected_submission_recovery.rb"),
+      encoding: "UTF-8"
+    )
+    assert_includes recovery, "/inAppPurchaseAvailability"
+    assert_includes recovery, "/availableTerritories"
 
     fastfile = File.read(File.join(ROOT, "fastlane/Fastfile"), encoding: "UTF-8")
     %w[submit_review iap_status iap_sync].each do |lane|
@@ -315,7 +359,7 @@ class ReleaseContractTest < Minitest::Test
       File.join(ROOT, "NovaStationPinball/App/RootView.swift"),
       encoding: "UTF-8"
     )
-    %w[workshopOpen workshop workshopClose workshopUnlock workshopStatus
+    %w[workshopOpen workshop workshopClose workshopUnlock workshopStatus workshopPrivacyLink workshopSupportLink
        paywall paywallTitle paywallClose paywallPurchase paywallRestore
        paywallTerms paywallTermsLink paywallPrivacyLink paywallStatus].each do |identifier|
       assert_includes root_view, %Q{"#{identifier}"}
@@ -325,6 +369,7 @@ class ReleaseContractTest < Minitest::Test
     assert_includes root_view, "offer.displayName"
     assert_includes root_view, "offer.displayPrice"
     assert_includes root_view, "WorkshopCatalog.termsOfUseURL"
+    assert_includes root_view, "WorkshopCatalog.supportURL"
     assert_includes root_view, "WorkshopCatalog.privacyURL"
     refute_match(/(?:USD|EUR|\$\s*\d|\d+[.,]\d{2}\s*€)/, root_view)
     assert_includes root_view, "paywall.loading"
@@ -345,7 +390,31 @@ class ReleaseContractTest < Minitest::Test
     assert_includes store, 'arguments.contains("-ui-testing")'
     assert_includes store, 'environment["NOVA_STORE_FIXTURE"] == "available"'
     assert_includes store, "return StoreKitWorkshopStoreBackend()"
-    assert_includes store, 'arguments.contains("-paywall-screenshot")'
+    assert_match(
+      /#if DEBUG\s+.*?static func isStoreBypassEnabled\(.*?guard arguments\.contains\("-ui-testing"\) else \{ return false \}.*?guard !arguments\.contains\("-paywall-screenshot"\) else \{ return false \}.*?#else/m,
+      store
+    )
+    assert_match(
+      /var hasWorkshop: Bool \{\s*#if DEBUG\s*bypassesStore \|\| !ownedEntitlementProductIDs\.isEmpty\s*#else\s*!ownedEntitlementProductIDs\.isEmpty\s*#endif\s*\}/m,
+      store
+    )
+
+    media_source = File.read(
+      File.join(ROOT, "NovaStationPinball/App/MediaScenario.swift"),
+      encoding: "UTF-8"
+    )
+    assert_match(
+      /#if DEBUG.*?let isUITesting = arguments\.contains\("-ui-testing"\).*?opensPaywall = isUITesting && arguments\.contains\("-paywall-screenshot"\).*?#endif/m,
+      media_source
+    )
+    assert_match(
+      /#if DEBUG\s+openLaunchPaywallIfRequested\(\)\s+await model\.runMediaPreviewSequenceIfRequested\(\)\s+#endif/m,
+      root_view
+    )
+    assert_match(
+      /#if DEBUG\s+private func openLaunchPaywallIfRequested\(\).*?#endif/m,
+      root_view
+    )
 
     # Grandfathering: the legacy signal is never a key this version writes.
     usage_keys = store[/static let usageSignalKeys: \[String\] = \[(.*?)\]/m, 1].to_s
@@ -458,7 +527,7 @@ class ReleaseContractTest < Minitest::Test
     ).fetch("strings")
     %w[
       paywall.title paywall.body paywall.one_time paywall.restore paywall.free_forever
-      paywall.link.terms paywall.link.privacy paywall.loading paywall.unavailable
+      paywall.link.terms paywall.link.privacy paywall.link.support paywall.loading paywall.unavailable
       workshop.title workshop.unlock workshop.rewind.remaining workshop.message.no_keyframe
     ].each do |key|
       assert_equal %w[en fr], catalog.fetch(key).fetch("localizations").keys.sort
@@ -626,6 +695,9 @@ class ReleaseContractTest < Minitest::Test
     end
     assert_includes screenshot_tests, "XCTAttachment(screenshot:"
     assert_includes screenshot_tests, "assertGuideCopyFitsAboveNavigation(in: app)"
+    assert_includes screenshot_tests, 'matching(identifier: "workshopPrivacyLink")'
+    assert_includes screenshot_tests, 'matching(identifier: "workshopSupportLink")'
+    assert_includes screenshot_tests, "checksOwnedWorkshopPrivacy: true"
     assert_includes screenshot_tests, "body.frame.maxY"
     assert_includes screenshot_tests, "next.frame.minY - 8"
     assert_includes preview_tests, "assertGuideCopyFitsAboveNavigation(in: app)"
@@ -691,17 +763,35 @@ class ReleaseContractTest < Minitest::Test
     assert_includes preview_test, "initialDelaySeconds: TimeInterval = 30"
     assert_includes preview_test, "requiredContinuousAbsenceSeconds: TimeInterval = 5"
     assert_includes preview_test, "maximumObservationSeconds: TimeInterval = 30"
+    assert_includes preview_test, '"media.timeline.started"'
     assert_operator preview_test.index("guard waitForSpringBoardToSettle()"), :<,
                     preview_test.index("let app = XCUIApplication()")
     assert_includes preview_generator, 'wait_for!("ready")'
     assert_includes preview_generator, 'wait_for!("complete")'
     assert_includes preview_generator, "wait_until_writing!"
     assert_includes preview_generator, "recorder.wait_until_elapsed!"
+    assert_includes preview_generator, "RECORDER_WARMUP_SECONDS = 5.0"
+    warmup_index = preview_generator.index(
+      "minimum_duration: CaptureWindow::RECORDER_WARMUP_SECONDS"
+    )
+    recording_marker_index = preview_generator.index('handshake.write!("recording")')
+    refute_nil warmup_index
+    refute_nil recording_marker_index
+    assert_operator warmup_index, :<, recording_marker_index
     assert_includes preview_generator, "CaptureTiming.trim_offset"
     assert_includes preview_generator, "capture_trim_offset: trim_offset"
     assert_includes preview_generator, "RAW_TAIL_MARGIN_SECONDS = 1.0"
     assert_includes preview_generator, "MAX_FINAL_PADDING_SECONDS = 1.0 / FRAME_RATE"
     assert_includes preview_generator, "RawTimeline.end_time"
+    assert_includes preview_generator, "RawFrameTimeline.validate!"
+    assert_includes preview_generator, '"-fflags", "+igndts"'
+    assert_includes preview_generator, "current >= previous"
+    assert_includes preview_generator, "frame timestamps regress"
+    assert_includes preview_generator, "MAX_RAW_CAPTURE_ATTEMPTS = 5"
+    assert_includes preview_generator, "rescue RawFrameTimelineError"
+    assert_includes preview_generator, '"--codec=hevc"'
+    assert_includes preview_generator, '"-c:v", "libx264"'
+    refute_includes preview_generator, '"--codec=h264"'
     assert_includes preview_generator, "CaptureWindow.residual_padding"
     assert_includes preview_generator, "EncodedMedia.validate!"
     assert_includes preview_generator, "timeout: 90.0"
@@ -832,7 +922,7 @@ class ReleaseContractTest < Minitest::Test
 
   def required_files
     %w[
-      AGENTS.md .gitignore README.md project.yml Package.swift Gemfile
+      .gitignore README.md project.yml Package.swift Gemfile
       NovaStationPinball/Resources/PrivacyInfo.xcprivacy
       NovaStationPinball/NovaStationPinball.entitlements
       NovaStationPinball/App/NovaStationPinballApp.swift
@@ -850,8 +940,13 @@ class ReleaseContractTest < Minitest::Test
       fastlane/metadata_preflight.rb
       fastlane/metadata_pretransport_recovery.json
       scripts/app_store/adopt_media.rb scripts/app_store/adopt_media_test.rb
+      scripts/app_store/game_center_contract.rb
+      scripts/app_store/game_center_contract_test.rb
+      scripts/app_store/rejected_submission_recovery.rb
+      scripts/app_store/rejected_submission_recovery_test.rb
       scripts/app_store/metadata_pretransport_recovery.rb
       scripts/app_store/metadata_pretransport_recovery_test.rb
+      scripts/app_store/status_test.rb
       fastlane/metadata/en-US/support_url.txt
       fastlane/metadata/fr-FR/support_url.txt
       docs/index.html docs/privacy.html

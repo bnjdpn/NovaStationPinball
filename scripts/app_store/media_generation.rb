@@ -228,11 +228,11 @@ module NovaStationPinballMediaGeneration
       ]
     end
 
-    def test_without_building_arguments(kind:, locale:, device:, run_root:, xctestrun:)
+    def test_without_building_arguments(kind:, locale:, device:, run_root:, xctestrun:, attempt: nil)
       assert_owned!
       validate_selection!(locale, device)
       suite = suite_for(kind)
-      scratch = scratch_root(run_root, locale, device, kind)
+      scratch = scratch_root(run_root, locale, device, kind, attempt: attempt)
       canonical_derived_data = File.join(canonical_scratch_root(run_root, device, kind), "DerivedData")
       [
         "xcodebuild", "test-without-building",
@@ -249,12 +249,23 @@ module NovaStationPinballMediaGeneration
       ]
     end
 
-    def scratch_root(run_root, locale, device, kind)
+    def scratch_root(run_root, locale, device, kind, attempt: nil)
       validate_selection!(locale, device)
-      File.join(
+      root = File.join(
         "/private/tmp/apps-factory/NovaStationPinball",
         execution_id, kind.to_s, locale, device
       )
+      return root if attempt.nil?
+
+      number = Integer(attempt)
+      unless number.positive? && number <= 20
+        raise NovaStationPinballMediaContract::ContractError,
+              "media capture attempt is outside the bounded range"
+      end
+      File.join(root, "capture-attempt-#{number}")
+    rescue ArgumentError, TypeError
+      raise NovaStationPinballMediaContract::ContractError,
+            "media capture attempt is invalid"
     end
 
     def canonical_scratch_root(run_root, device, kind)

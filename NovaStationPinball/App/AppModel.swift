@@ -4,9 +4,11 @@ import Observation
 
 @Observable @MainActor
 final class AppModel {
+#if DEBUG
     private enum MediaPreviewSequenceError: Error {
         case missingPreparedSession
     }
+#endif
 
     private enum GameStatus {
         case systemReady
@@ -65,11 +67,16 @@ final class AppModel {
     private let hapticsService: any PinballHapticsService
     private let gameCenterClient: any GameCenterClient
     private let localGameStore: LocalGameStore
+#if DEBUG
     private let mediaLaunchConfiguration: MediaLaunchConfiguration
+#endif
     private var didStartOptionalServices = false
     private var gameCompletionGate = GameCompletionGate()
+#if DEBUG
     private(set) var mediaScenario: MediaScenario?
+    private(set) var mediaPreviewTimelineStarted = false
     var runsMediaPreviewSequence: Bool { mediaLaunchConfiguration.runsPreviewSequence }
+#endif
 
     // MARK: - Workshop
 
@@ -84,7 +91,9 @@ final class AppModel {
     private var drillEvaluator: ShotDrillEvaluator?
     /// True as soon as this run used a rewind, a review or a drill.
     private(set) var isAssistedRun = false
+#if DEBUG
     var opensPaywallOnLaunch: Bool { mediaLaunchConfiguration.opensPaywall }
+#endif
 
     var hasWorkshop: Bool { store.hasWorkshop }
     /// Device already played Nova Station before the Workshop existed. It only
@@ -125,6 +134,7 @@ final class AppModel {
         }
     )
 
+#if DEBUG
     init(
         audioEngine: any PinballAudioEngine = AVAudioPinballEngine(),
         hapticsService: any PinballHapticsService = CoreHapticsService(),
@@ -147,6 +157,23 @@ final class AppModel {
         drillProgress = (try? localGameStore.loadDrillProgress()) ?? DrillProgress()
         isAssistedRun = localGameStore.isAssistedSessionMarked
     }
+#else
+    init(
+        audioEngine: any PinballAudioEngine = AVAudioPinballEngine(),
+        hapticsService: any PinballHapticsService = CoreHapticsService(),
+        gameCenterClient: any GameCenterClient = GameKitGameCenterClient(),
+        localGameStore: LocalGameStore = .applicationDefault(),
+        store: StoreService = StoreService()
+    ) {
+        self.audioEngine = audioEngine
+        self.hapticsService = hapticsService
+        self.gameCenterClient = gameCenterClient
+        self.localGameStore = localGameStore
+        self.store = store
+        drillProgress = (try? localGameStore.loadDrillProgress()) ?? DrillProgress()
+        isAssistedRun = localGameStore.isAssistedSessionMarked
+    }
+#endif
 
     func apply(_ events: [PinballControlEvent]) {
         guard lifecycleCoordinator.allowsGameplayInput else { return }
@@ -201,6 +228,7 @@ final class AppModel {
         lifecycleCoordinator.start()
     }
 
+#if DEBUG
     func applyMediaScenario(_ scenario: MediaScenario, preparedSession: GameSession? = nil) {
         guard mediaLaunchConfiguration.scenario != nil else { return }
         mediaScenario = scenario
@@ -220,6 +248,7 @@ final class AppModel {
             let clock = ContinuousClock()
             let timelineStart = clock.now
             try handshake.signalStarted()
+            mediaPreviewTimelineStarted = true
             for (offset, scenario) in MediaScenario.allCases.dropFirst().enumerated() {
                 try await clock.sleep(until: timelineStart.advanced(by: .seconds((offset + 1) * 4)))
                 guard let preparedSession = preparedSessions[scenario] else {
@@ -233,6 +262,7 @@ final class AppModel {
             return
         }
     }
+#endif
 
     func setApplicationActivity(_ activity: LifecycleApplicationActivity) {
         lifecycleCoordinator.setApplicationActivity(activity)

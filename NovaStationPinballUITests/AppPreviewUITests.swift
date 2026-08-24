@@ -47,6 +47,10 @@ final class AppPreviewUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.otherElements["art.frame.4x3"].waitForExistence(timeout: 8))
+        XCTAssertTrue(
+            app.otherElements["media.timeline.started"].waitForExistence(timeout: 12),
+            "Preview timeline did not acknowledge the recorder pre-roll"
+        )
         for scenario in scenarios {
             XCTAssertTrue(
                 app.otherElements["media.scenario.\(scenario)"].waitForExistence(timeout: 5),

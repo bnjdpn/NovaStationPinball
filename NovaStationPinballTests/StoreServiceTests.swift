@@ -222,6 +222,31 @@ final class StoreServiceTests: XCTestCase {
         XCTAssertFalse(store.hasWorkshop)
     }
 
+    func testReopeningAfterAnUnavailableOfferRetriesAndRecovers() async {
+        let backend = StubWorkshopStoreBackend()
+        backend.offer = nil
+        let store = makeStore(backend)
+
+        await store.loadOfferIfNeeded()
+        XCTAssertEqual(store.loadState, .unavailable)
+        XCTAssertEqual(backend.loadOfferCallCount, 1)
+
+        backend.offer = WorkshopOffer(
+            productIdentifier: WorkshopCatalog.workshopProductID,
+            displayName: "L’Atelier",
+            displayPrice: "4,99 €",
+            localizedDescription: "Rembobinage illimité et atelier de tir."
+        )
+        await store.loadOfferIfNeeded()
+
+        XCTAssertEqual(store.loadState, .available)
+        XCTAssertEqual(store.offer?.displayName, "L’Atelier")
+        XCTAssertEqual(backend.loadOfferCallCount, 2)
+
+        await store.loadOfferIfNeeded()
+        XCTAssertEqual(backend.loadOfferCallCount, 2, "an available offer must remain cached")
+    }
+
     func testPurchasingUnlocksTheWorkshopAndReportsIt() async {
         let backend = StubWorkshopStoreBackend()
         let store = makeStore(backend)
@@ -280,9 +305,9 @@ final class StoreServiceTests: XCTestCase {
         XCTAssertTrue(unlocked)
     }
 
-    func testTheStoreIsBypassedForUITestsAndScreenshotsButNeverForThePaywallCapture() {
+    func testTheStoreBypassRequiresTheDebugUITestGateAndNeverAppliesToPaywallCapture() {
         XCTAssertTrue(StoreService.isStoreBypassEnabled(arguments: ["app", "-ui-testing"]))
-        XCTAssertTrue(StoreService.isStoreBypassEnabled(arguments: ["app", "-screenshots"]))
+        XCTAssertFalse(StoreService.isStoreBypassEnabled(arguments: ["app", "-screenshots"]))
         XCTAssertFalse(StoreService.isStoreBypassEnabled(arguments: ["app"]))
         XCTAssertFalse(
             StoreService.isStoreBypassEnabled(arguments: ["app", "-ui-testing", "-paywall-screenshot"]),
@@ -291,8 +316,9 @@ final class StoreServiceTests: XCTestCase {
     }
 
     func testTheLaunchArgumentThatOpensThePaywallIsRecognized() {
-        XCTAssertTrue(
-            MediaLaunchConfiguration(arguments: ["app", "-paywall-screenshot"]).opensPaywall
+        XCTAssertFalse(
+            MediaLaunchConfiguration(arguments: ["app", "-paywall-screenshot"]).opensPaywall,
+            "test-only paywall launch behavior requires the explicit UI-test gate"
         )
         XCTAssertTrue(
             MediaLaunchConfiguration(arguments: ["app", "-ui-testing", "-paywall-screenshot"]).opensPaywall
@@ -327,6 +353,11 @@ final class StoreServiceTests: XCTestCase {
         let frenchDisclosure = try XCTUnwrap(french["paywall.one_time"]).lowercased()
         XCTAssertTrue(frenchDisclosure.contains("achat unique"), frenchDisclosure)
         XCTAssertTrue(frenchDisclosure.contains("pas un abonnement"), frenchDisclosure)
+
+        let englishUnavailable = try XCTUnwrap(english["paywall.unavailable"]).lowercased()
+        XCTAssertTrue(englishUnavailable.contains("reopen the workshop"), englishUnavailable)
+        let frenchUnavailable = try XCTUnwrap(french["paywall.unavailable"]).lowercased()
+        XCTAssertTrue(frenchUnavailable.contains("rouvrez l’atelier"), frenchUnavailable)
 
         for locale in [english, french] {
             XCTAssertFalse(try XCTUnwrap(locale["paywall.restore"]).isEmpty)

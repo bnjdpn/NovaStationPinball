@@ -4,6 +4,8 @@
 require "json"
 require "optparse"
 require_relative "client"
+require_relative "game_center_contract"
+require_relative "rejected_submission_recovery"
 require_relative "../../fastlane/release_support"
 
 module NovaStationPinballReviewSubmission
@@ -36,6 +38,62 @@ module NovaStationPinballReviewSubmission
     end
 
     products
+  end
+
+  def declared_retired_products(config)
+    config.fetch("retired_iap_products", []).map do |product|
+      {
+        "product_id" => product.fetch("product_id"),
+        "type" => product.fetch("type"),
+        "target_state" => product.fetch("target_state")
+      }
+    end
+  end
+
+  def validate_retired_products!(client, app_id, retired_products)
+    return if retired_products.empty?
+
+    catalogue = client.get_all("/v1/apps/#{app_id}/inAppPurchasesV2", {
+      "fields[inAppPurchases]" => "productId,inAppPurchaseType,state",
+      "limit" => "200"
+    }).fetch("data")
+    retired_products.each do |product|
+      product_id = product.fetch("product_id")
+      matches = catalogue.select do |item|
+        item.dig("attributes", "productId") == product_id
+      end
+      unless matches.length == 1
+        raise "Expected exactly one retired IAP in App Store Connect: " \
+              "#{product_id}; found #{matches.length}"
+      end
+
+      item = matches.first
+      actual_type = item.dig("attributes", "inAppPurchaseType")
+      unless actual_type == product.fetch("type")
+        raise "Retired IAP type differs from the release configuration: " \
+              "#{product_id} is #{actual_type}, expected #{product.fetch('type')}"
+      end
+      actual_state = item.dig("attributes", "state")
+      unless actual_state == product.fetch("target_state")
+        raise "Retired IAP does not match the release configuration: " \
+              "#{product_id} is #{actual_state}, expected " \
+              "#{product.fetch('target_state')}"
+      end
+
+      NovaStationPinballRejectedSubmissionRecovery::RetiredIapReadback.exact!(
+        client: client, iap_id: item.fetch("id"), product_id: product_id
+      )
+    end
+  end
+
+  def declared_leaderboards(config)
+    NovaStationPinballGameCenterContract.declared(config)
+  end
+
+  def leaderboard_submission_records(client, app_id, definitions)
+    NovaStationPinballGameCenterContract.resolve_reviewable_versions(
+      client: client, app_id: app_id, definitions: definitions
+    )
   end
 
   # One record per sold product: the version that has to travel with this app
@@ -92,22 +150,57 @@ module NovaStationPinballReviewSubmission
   end
 
   # The exact resources this app version has to be submitted with.
-  def required_resources(app_version_id, records)
+  def required_resources(app_version_id, product_records, leaderboard_records = [])
     [["appStoreVersions", app_version_id]] +
-      records.select { |record| record.fetch("required") }
-             .map { |record| ["inAppPurchaseVersions", record.fetch("version_id")] }
+      leaderboard_records.map do |record|
+        ["gameCenterLeaderboardVersions", record.fetch("version_id")]
+      end +
+      product_records.select { |record| record.fetch("required") }
+                     .map do |record|
+        ["inAppPurchaseVersions", record.fetch("version_id")]
+      end
   end
 
   def resources(client, submission_id)
     client.get_all("/v1/reviewSubmissions/#{submission_id}/items", {
+      "include" =>
+        "appStoreVersion,gameCenterLeaderboardVersion,inAppPurchaseVersion",
       "fields[reviewSubmissionItems]" =>
-        "state,appStoreVersion,inAppPurchaseVersion",
+        "state,appStoreVersion,gameCenterLeaderboardVersion,inAppPurchaseVersion",
+      "fields[gameCenterLeaderboardVersions]" => "version,state",
       "limit" => "200"
-    }).fetch("data").flat_map do |item|
-      %w[appStoreVersion inAppPurchaseVersion].map do |relationship|
-        resource = item.dig("relationships", relationship, "data")
-        resource && [resource.fetch("type"), resource.fetch("id")]
-      end.compact
+    }).fetch("data").map { |item| review_item_resource!(item) }
+  end
+
+  def review_item_resource!(item)
+    relationships = {
+      "appStoreVersion" => "appStoreVersions",
+      "gameCenterLeaderboardVersion" => "gameCenterLeaderboardVersions",
+      "inAppPurchaseVersion" => "inAppPurchaseVersions"
+    }
+    resources = relationships.map do |relationship, expected_type|
+      resource = item.dig("relationships", relationship, "data")
+      next unless resource
+      unless resource.fetch("type") == expected_type
+        raise "Review item #{item.fetch('id')} has an invalid #{relationship} type"
+      end
+
+      [resource.fetch("type"), resource.fetch("id")]
+    end.compact
+    unless resources.length == 1
+      raise "Review item #{item.fetch('id')} must reference exactly one review resource"
+    end
+
+    resources.first
+  end
+
+  def review_item_relationship(resource_type)
+    case resource_type
+    when "appStoreVersions" then "appStoreVersion"
+    when "gameCenterLeaderboardVersions" then "gameCenterLeaderboardVersion"
+    when "inAppPurchaseVersions" then "inAppPurchaseVersion"
+    else
+      raise "Unsupported review resource type: #{resource_type}"
     end
   end
 
@@ -209,6 +302,9 @@ if $PROGRAM_NAME == __FILE__
       item.dig("attributes", "versionString") == version_string
     end
     raise "Version #{version_string} not found" unless version
+    NovaStationPinballGameCenterContract.app_version_enabled!(
+      client: client, app_store_version_id: version.fetch("id")
+    )
     selected = client.get(
       "/v1/appStoreVersions/#{version.fetch('id')}/build",
       { "fields[builds]" => "version,processingState,expired" }, optional: true
@@ -223,8 +319,17 @@ if $PROGRAM_NAME == __FILE__
       client, app.fetch("id"),
       NovaStationPinballReviewSubmission.declared_products(config)
     )
+    NovaStationPinballReviewSubmission.validate_retired_products!(
+      client, app.fetch("id"),
+      NovaStationPinballReviewSubmission.declared_retired_products(config)
+    )
+    leaderboard_records =
+      NovaStationPinballReviewSubmission.leaderboard_submission_records(
+        client, app.fetch("id"),
+        NovaStationPinballReviewSubmission.declared_leaderboards(config)
+      )
     required = NovaStationPinballReviewSubmission.required_resources(
-      version.fetch("id"), records
+      version.fetch("id"), records, leaderboard_records
     )
     bundled = required.map { |type, id| id if type == "inAppPurchaseVersions" }.compact
     records.each do |record|
@@ -290,8 +395,8 @@ if $PROGRAM_NAME == __FILE__
 
     missing = required - submission.fetch("resources")
     missing.each do |type, resource_id|
-      relationship = type == "appStoreVersions" ?
-        "appStoreVersion" : "inAppPurchaseVersion"
+      relationship =
+        NovaStationPinballReviewSubmission.review_item_relationship(type)
       safe_id = resource_id.gsub(/[^0-9A-Za-z._-]/, "-")
       proof = {
         intent_path: File.join(logs, "review-item-#{safe_id}-intent.json"),
@@ -354,6 +459,7 @@ if $PROGRAM_NAME == __FILE__
     NovaStationPinballReleaseSupport.mark_observed!(**submit_proof)
     puts "Submitted #{bundle_id} #{version_string} build #{target.fetch('build')}"
   rescue ArgumentError, KeyError, JSON::ParserError, RuntimeError,
+         NovaStationPinballRejectedSubmissionRecovery::Error,
          NovaStationPinballAscError => error
     warn "review_submission: #{error.message}"
     exit 1

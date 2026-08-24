@@ -6,6 +6,7 @@ require "digest"
 require "json"
 require "pathname"
 require "yaml"
+require_relative "app_store/game_center_contract"
 require_relative "pages_workflow_contract"
 
 module NovaStationPinballReleaseContract
@@ -51,6 +52,7 @@ module NovaStationPinballReleaseContract
       validate_bootstrap_sources
       validate_release_config
       validate_release_pipeline_products
+      validate_game_center_pipeline
       validate_metadata
       validate_privacy_manifest
       validate_media_pipeline
@@ -65,7 +67,7 @@ module NovaStationPinballReleaseContract
 
     def validate_required_files
       %w[
-        AGENTS.md .gitignore README.md project.yml Package.swift Gemfile
+        .gitignore README.md project.yml Package.swift Gemfile
         NovaStationPinball/Resources/PrivacyInfo.xcprivacy
         NovaStationPinball/NovaStationPinball.entitlements
         NovaStationPinball/App/NovaStationPinballApp.swift
@@ -93,9 +95,14 @@ module NovaStationPinballReleaseContract
         scripts/app_store/adopt_media.rb
         scripts/app_store/adopt_media_test.rb
         scripts/app_store/client_test.rb
+        scripts/app_store/game_center_contract.rb
+        scripts/app_store/game_center_contract_test.rb
+        scripts/app_store/rejected_submission_recovery.rb
+        scripts/app_store/rejected_submission_recovery_test.rb
         scripts/app_store/metadata_pretransport_recovery.rb
         scripts/app_store/metadata_pretransport_recovery_test.rb
         scripts/app_store/setup_asc_test.rb
+        scripts/app_store/status_test.rb
         scripts/app_store/media_generation.rb
         scripts/app_store/generate_screenshots.rb
         scripts/app_store/generate_app_previews.rb
@@ -181,6 +188,7 @@ module NovaStationPinballReleaseContract
         error("a tip product must not be sold alongside a paid unlock") if product.fetch("product_id", "").include?(".tip.")
       end
       error("iap list must mirror configured monetization products") unless config.fetch("iap").sort == product_ids.sort
+      validate_game_center_config(config)
       validate_monetization_strategy(config, product_ids)
       validate_products_manifest(config)
       error("support URL mismatch") unless config["support_url"] == "https://bnjdpn.github.io/NovaStationPinball/#contact"
@@ -201,6 +209,60 @@ module NovaStationPinballReleaseContract
       error("media scenarios mismatch") unless media["scenarios"] == expected_scenarios
     rescue StandardError => exception
       error("invalid release config: #{exception.message}")
+    end
+
+    def validate_game_center_config(config)
+      maximum_score_source = File.read(
+        path("NovaStationCore/Sources/NovaStationCore/ScoreEngine.swift"),
+        encoding: "UTF-8"
+      )
+      literal = maximum_score_source[
+        /public static let maximumScore\s*=\s*([0-9_]+)/, 1
+      ]
+      raise "ScoreEngine.maximumScore is not a static integer literal" unless literal
+
+      maximum_score = Integer(literal.delete("_"), 10)
+      expected = [{
+        "id" => "nova-station-high-score",
+        "reference_name" => "Nova Station High Score",
+        "default_formatter" => "INTEGER",
+        "submission_type" => "BEST_SCORE",
+        "score_sort_type" => "DESC",
+        "score_range_start" => 0,
+        "score_range_end" => maximum_score,
+        "recurrence_start_date" => nil,
+        "recurrence_duration" => nil,
+        "recurrence_rule" => nil,
+        "localizations" => {
+          "en-US" => {
+            "name" => "Nova Station High Scores",
+            "description" =>
+              "Highest score from a standard game. Runs using Workshop tools are excluded.",
+            "suffix" => "points",
+            "singular_suffix" => "point"
+          },
+          "fr-FR" => {
+            "name" => "Scores de Nova Station",
+            "description" =>
+              "Meilleur score d’une partie standard. Les parties utilisant l’Atelier sont exclues.",
+            "suffix" => "points",
+            "singular_suffix" => "point"
+          }
+        }
+      }]
+      definitions = NovaStationPinballGameCenterContract.declared(config)
+      error("Game Center leaderboard contract mismatch") unless definitions == expected
+      error("Game Center leaderboard ids mismatch") unless
+        config.fetch("leaderboard_ids") == expected.map { |definition| definition.fetch("id") }
+
+      client_source = File.read(
+        path("NovaStationPinball/Services/GameCenterClient.swift"),
+        encoding: "UTF-8"
+      )
+      error("GameCenterClient does not use the configured leaderboard id") unless
+        client_source.include?(%Q{["#{expected.first.fetch('id')}"]})
+    rescue StandardError => exception
+      error("invalid Game Center release contract: #{exception.message}")
     end
 
     def validate_monetization_strategy(config, product_ids)
@@ -319,6 +381,18 @@ module NovaStationPinballReleaseContract
       error("a never-shipped product must be submitted with the app version") unless
         submit.include?("must_bundle") &&
           submit.include?("IAP version must be submitted with the app version")
+      error("review submission must prove retired-IAP availability and territories") unless
+        submit.include?("RetiredIapReadback.exact!")
+
+      recovery = File.read(
+        path("scripts/app_store/rejected_submission_recovery.rb"),
+        encoding: "UTF-8"
+      )
+      error("retired-IAP gate must read the exact availability relationship") unless
+        recovery.include?("/inAppPurchaseAvailability") &&
+          recovery.include?("/availableTerritories") &&
+          recovery.include?("available_in_new_territories") &&
+          recovery.include?("available_territory_count")
 
       status = File.read(path("scripts/app_store/status.rb"), encoding: "UTF-8")
       error("the IAP readback must report retired products on their own line") unless
@@ -333,6 +407,74 @@ module NovaStationPinballReleaseContract
       end
     rescue StandardError => exception
       error("invalid release pipeline product contract: #{exception.message}")
+    end
+
+    def validate_game_center_pipeline
+      setup = File.read(path("scripts/app_store/setup_asc.rb"), encoding: "UTF-8")
+      game_center_contract = File.read(
+        path("scripts/app_store/game_center_contract.rb"), encoding: "UTF-8"
+      )
+      error("setup_asc must provision leaderboards through the v2 endpoint") unless
+        setup.include?('"/v2/gameCenterLeaderboards"')
+      error("setup_asc must create the first leaderboard version inline") unless
+        setup.include?("gameCenterLeaderboardVersions") &&
+          setup.include?("included:")
+      error("setup_asc must never POST a second leaderboard version") if
+        setup.include?('client.post("/v2/gameCenterLeaderboardVersions"')
+      error("setup_asc must provision v2 leaderboard localizations") unless
+        setup.include?('"/v2/gameCenterLeaderboardLocalizations"')
+      error("setup_asc must require explicit durable mutation proofs") unless
+        setup.include?("apply_run_id!") &&
+          setup.include?("NovaStationPinballReleaseSupport.transport_once!") &&
+          setup.include?("NovaStationPinballReleaseSupport.mark_observed!") &&
+          setup.include?('kind: "setup_asc"')
+      error("setup_asc must fail closed instead of PATCHing Game Center") if
+        setup.match?(/client\.patch\([^\n]*gameCenter/)
+      error("Game Center localizations must read back an explicit nil formatter override") unless
+        setup.include?("formatterOverride: nil") &&
+          setup.include?("formatterOverride")
+      error("Game Center localization creation must include the localized description") unless
+        setup.include?('description: localization.fetch("description")')
+      error("setup_asc must retain a readback-only default") unless
+        setup.include?("if options[:apply]") &&
+          setup.include?("NovaStationPinballAscSetup.inspect!")
+      error("setup_asc must verify Game Center on the exact App Store version") unless
+        setup.include?("app_version_enabled!")
+      error("Game Center app-version readback must use the exact API relationship") unless
+        game_center_contract.include?("/gameCenterAppVersion") &&
+          game_center_contract.include?('"enabled" => true') &&
+          game_center_contract.include?('"appStoreVersion"')
+      error("Game Center localization readback must require formatterOverride=nil") unless
+        game_center_contract.include?('key?("formatterOverride")') &&
+          game_center_contract.include?('attributes["formatterOverride"].nil?')
+      error("Game Center localization readback must require the exact description") unless
+        game_center_contract.include?('"description" => attributes["description"]')
+
+      submit = File.read(
+        path("scripts/app_store/review_submission.rb"), encoding: "UTF-8"
+      )
+      error("review submission must resolve the configured Game Center leaderboard") unless
+        submit.include?("leaderboard_submission_records") &&
+          submit.include?("declared_leaderboards")
+      error("review submission must attach the Game Center leaderboard version") unless
+        submit.include?("gameCenterLeaderboardVersions") &&
+          submit.include?("gameCenterLeaderboardVersion")
+      error("review submission must require Game Center on the exact app version") unless
+        submit.include?("app_version_enabled!")
+      error("review submission must block on retired-IAP live state") unless
+        submit.include?("validate_retired_products!") &&
+          submit.include?("target_state")
+
+      status = File.read(path("scripts/app_store/status.rb"), encoding: "UTF-8")
+      error("status must read Game Center review-item relationships") unless
+        status.include?("gameCenterLeaderboardVersion")
+      error("status must expose exact required review resources") unless
+        status.include?("required_review_resources")
+      error("status must require and expose Game Center on the exact app version") unless
+        status.include?("app_version_enabled!") &&
+          status.include?('"app_version" => game_center_app_version')
+    rescue StandardError => exception
+      error("invalid Game Center release pipeline: #{exception.message}")
     end
 
     def validate_metadata
@@ -577,6 +719,8 @@ module NovaStationPinballReleaseContract
       fastfile = File.read(path("fastlane/Fastfile"), encoding: "UTF-8")
       REQUIRED_LANES.each { |lane| error("missing Fastlane lane #{lane}") unless fastfile.match?(/^\s*lane :#{Regexp.escape(lane)}\b/) }
       error("Fastlane lane must invoke standalone contract") unless fastfile.include?("scripts/release_contract.rb")
+      error("Fastlane release contract must run rejected-submission recovery tests") unless
+        fastfile.include?("scripts/app_store/rejected_submission_recovery_test.rb")
     rescue Errno::ENOENT
       error("missing fastlane/Fastfile")
     end
@@ -731,9 +875,14 @@ module NovaStationPinballReleaseContract
              store.include?("return StoreKitWorkshopStoreBackend()")
         error("the store fixture must be DEBUG-only, double-gated, and default to StoreKit")
       end
-      unless store.include?('arguments.contains("-paywall-screenshot")') &&
-             store.match?(/guard !arguments\.contains\("-paywall-screenshot"\) else \{ return false \}/)
-        error("the paywall capture must never run with the store bypass enabled")
+      debug_bypass = store.match?(
+        /#if DEBUG\s+.*?static func isStoreBypassEnabled\(.*?guard arguments\.contains\("-ui-testing"\) else \{ return false \}.*?guard !arguments\.contains\("-paywall-screenshot"\) else \{ return false \}.*?#else/m
+      )
+      release_has_no_bypass = store.match?(
+        /var hasWorkshop: Bool \{\s*#if DEBUG\s*bypassesStore \|\| !ownedEntitlementProductIDs\.isEmpty\s*#else\s*!ownedEntitlementProductIDs\.isEmpty\s*#endif\s*\}/m
+      )
+      unless debug_bypass && release_has_no_bypass
+        error("the ownership bypass must be DEBUG-only, UI-test gated, excluded from paywall capture, and absent from Release")
       end
 
       keys = store[/static let usageSignalKeys: \[String\] = \[(.*?)\]/m, 1].to_s
@@ -1031,7 +1180,7 @@ module NovaStationPinballReleaseContract
     # explicit non-subscription wording, restore, terms and privacy.
     def validate_paywall_ui(root_view)
       %w[paywall paywallTitle paywallClose paywallPurchase paywallRestore paywallTerms
-         paywallTermsLink paywallPrivacyLink paywallStatus].each do |identifier|
+         paywallTermsLink paywallPrivacyLink paywallStatus workshopPrivacyLink workshopSupportLink].each do |identifier|
         error("paywall is missing stable identifier #{identifier}") unless
           root_view.include?(%Q{"#{identifier}"})
       end
@@ -1042,13 +1191,15 @@ module NovaStationPinballReleaseContract
         error("paywall must not hard-code prices or currencies")
       end
       unless root_view.include?("WorkshopCatalog.termsOfUseURL") &&
+             root_view.include?("WorkshopCatalog.supportURL") &&
              root_view.include?("WorkshopCatalog.privacyURL")
-        error("paywall must link the terms of use and the privacy policy")
+        error("the app must link support and privacy permanently, plus terms from the paywall")
       end
       store = File.read(path("NovaStationPinball/Services/StoreService.swift"), encoding: "UTF-8")
       unless store.include?('static let termsOfUseURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"') &&
+             store.include?('static let supportURL = "https://bnjdpn.github.io/NovaStationPinball/#contact"') &&
              store.include?('static let privacyURL = "https://bnjdpn.github.io/NovaStationPinball/privacy.html"')
-        error("paywall legal links must be the Apple standard EULA and the app privacy page")
+        error("legal links must be the Apple standard EULA plus the app support and privacy pages")
       end
       unless root_view.include?("paywall.loading") && root_view.include?("paywall.unavailable")
         error("paywall must design its loading and no-product states")
@@ -1058,7 +1209,7 @@ module NovaStationPinballReleaseContract
       strings = catalog.fetch("strings")
       required_keys = %w[
         paywall.title paywall.body paywall.one_time paywall.restore paywall.link.terms
-        paywall.link.privacy paywall.loading paywall.unavailable paywall.free_forever
+        paywall.link.privacy paywall.link.support paywall.loading paywall.unavailable paywall.free_forever
         workshop.title workshop.unlock workshop.rewind.remaining workshop.message.no_keyframe
       ] + ShotDrillIdentifiers.all.map { |id| "drill.#{id}" }
       required_keys.each do |key|
@@ -1084,9 +1235,16 @@ module NovaStationPinballReleaseContract
       validate_paywall_review_capture
 
       media = File.read(path("NovaStationPinball/App/MediaScenario.swift"), encoding: "UTF-8")
-      unless media.include?('opensPaywall = arguments.contains("-paywall-screenshot")') &&
-             root_view.include?("openLaunchPaywallIfRequested()")
-        error("-paywall-screenshot must open the paywall at launch for the capture pipelines")
+      debug_media_hook = media.match?(
+        /#if DEBUG.*?let isUITesting = arguments\.contains\("-ui-testing"\).*?opensPaywall = isUITesting && arguments\.contains\("-paywall-screenshot"\).*?#endif/m
+      )
+      debug_root_hook = root_view.match?(
+        /#if DEBUG\s+openLaunchPaywallIfRequested\(\)\s+await model\.runMediaPreviewSequenceIfRequested\(\)\s+#endif/m
+      ) && root_view.match?(
+        /#if DEBUG\s+private func openLaunchPaywallIfRequested\(\).*?#endif/m
+      )
+      unless debug_media_hook && debug_root_hook
+        error("the paywall/media launch hooks must work for DEBUG capture pipelines and be compiled out of Release")
       end
 
       background_is_conditional = root_view.match?(
@@ -1131,8 +1289,26 @@ module NovaStationPinballReleaseContract
 
     def validate_support_page
       page = File.read(path("docs/index.html"), encoding: "UTF-8")
+      privacy = File.read(path("docs/privacy.html"), encoding: "UTF-8")
       error("support Formspree endpoint mismatch") unless page.include?(FORMSPREE_ENDPOINT)
       error("support page must expose #contact") unless page.include?("id=\"contact\"")
+      %w[category email app_version os_version message].each do |field|
+        error("support page must disclose and collect #{field}") unless page.include?(%Q{name="#{field}"})
+      end
+      unless privacy.include?("Formspree, Inc.") &&
+             privacy.include?("https://formspree.io/legal/privacy-policy/") &&
+             privacy.include?("https://formspree.io/security/") &&
+             privacy.include?("adresse IP") && privacy.include?("IP address") &&
+             privacy.include?("conservation") && privacy.include?("retention") &&
+             privacy.include?("rectification") && privacy.include?("correction") &&
+             privacy.include?("Game Center authentication at launch") &&
+             privacy.include?("dix meilleurs scores locaux") && privacy.include?("local top ten") &&
+             privacy.match?(/protection\s+identique ou\s+équivalente/) &&
+             privacy.include?("same or equivalent")
+        error("privacy page must disclose support data, processor, transfers, retention, rights, and launch-time Game Center authentication")
+      end
+      error("support page must offer a Privacy request category") unless
+        page.include?('<option value="privacy">Confidentialité / Privacy</option>')
       public_contact_paths.each do |relative|
         contents = File.read(path(relative), encoding: "UTF-8")
         error("public mailto link in #{relative}") if contents.match?(/mailto:/i)

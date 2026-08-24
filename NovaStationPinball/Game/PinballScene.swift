@@ -35,6 +35,7 @@ final class PinballScene: SKScene {
     init(model: AppModel) {
         self.model = model
         let initialSession: GameSession
+#if DEBUG
         if let scenario = model.mediaScenario,
            let scenarioSession = try? scenario.makeSession() {
             initialSession = scenarioSession
@@ -43,6 +44,13 @@ final class PinballScene: SKScene {
         } else {
             preconditionFailure("The validated Nova Station table could not initialize")
         }
+#else
+        if let freshSession = try? GameSession() {
+            initialSession = freshSession
+        } else {
+            preconditionFailure("The validated Nova Station table could not initialize")
+        }
+#endif
         driver = SimulationDriver(session: initialSession)
         driver.setPaused(true)
         super.init(size: Layout.sceneSize)
@@ -166,6 +174,7 @@ final class PinballScene: SKScene {
         render(sessionFrame: driver.currentSessionFrame, input: .idle)
     }
 
+#if DEBUG
     @discardableResult
     func applyMediaScenario(
         _ scenario: MediaScenario,
@@ -187,6 +196,7 @@ final class PinballScene: SKScene {
             preconditionFailure("Invalid deterministic media scenario \(scenario.rawValue): \(error)")
         }
     }
+#endif
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         interpret(touches, phase: .began)

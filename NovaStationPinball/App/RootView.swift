@@ -25,7 +25,9 @@ struct RootView: View {
     @State private var tableGuideStep = TableGuideStep.controls
     @State private var workshopMessage: WorkshopMessage?
     @State private var reviewSpeed = ReviewSpeed.full
+#if DEBUG
     @State private var didOpenLaunchPaywall = false
+#endif
 
     var body: some View {
         ZStack {
@@ -79,6 +81,7 @@ struct RootView: View {
                                     .accessibilityAddTraits(.updatesFrequently)
                             }
                         }
+#if DEBUG
                         if let mediaScenario = model.mediaScenario {
                             Rectangle().fill(.clear)
                                 .frame(width: 1, height: 1)
@@ -86,6 +89,14 @@ struct RootView: View {
                                 .accessibilityIdentifier("media.scenario.\(mediaScenario.rawValue)")
                                 .accessibilityLabel(Text(mediaScenario.rawValue))
                         }
+                        if model.mediaPreviewTimelineStarted {
+                            Rectangle().fill(.clear)
+                                .frame(width: 1, height: 1)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityIdentifier("media.timeline.started")
+                                .accessibilityLabel(Text(verbatim: "Media timeline started"))
+                        }
+#endif
                     }
                 }
                 .overlay(alignment: .topTrailing) {
@@ -183,15 +194,19 @@ struct RootView: View {
         .persistentSystemOverlays(.hidden)
         .task {
             model.start()
+#if DEBUG
             openLaunchPaywallIfRequested()
             await model.runMediaPreviewSequenceIfRequested()
+#endif
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             model.setApplicationActivity(Self.lifecycleActivity(for: phase))
         }
+#if DEBUG
         .onChange(of: model.mediaScenario) { _, scenario in
             synchronizePreviewTableGuide(for: scenario)
         }
+#endif
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
             handleAudioInterruption(notification)
         }
@@ -250,11 +265,13 @@ struct RootView: View {
         model.endModalOverlay()
     }
 
+#if DEBUG
     private func openLaunchPaywallIfRequested() {
         guard model.opensPaywallOnLaunch, !didOpenLaunchPaywall else { return }
         didOpenLaunchPaywall = true
         presentPaywall()
     }
+#endif
 
     /// Every Workshop action funnels its refusal into the same two places:
     /// the paywall, or an explicit in-sheet explanation.
@@ -270,6 +287,7 @@ struct RootView: View {
         }
     }
 
+#if DEBUG
     private func synchronizePreviewTableGuide(for scenario: MediaScenario?) {
         guard model.runsMediaPreviewSequence else { return }
         if scenario == .mission {
@@ -278,6 +296,7 @@ struct RootView: View {
             dismissTableGuide()
         }
     }
+#endif
 
     private static func lifecycleActivity(for phase: ScenePhase) -> LifecycleApplicationActivity {
         switch phase {
@@ -513,6 +532,8 @@ private struct WorkshopOverlay: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("workshopBody")
 
+                        supportLinks
+
                         Divider().overlay(WorkshopPalette.hairline)
 
                         rewindSection
@@ -524,6 +545,7 @@ private struct WorkshopOverlay: View {
                                 .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityIdentifier("workshopStatus")
                         }
+
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -568,6 +590,35 @@ private struct WorkshopOverlay: View {
             .accessibilityLabel(Text("workshop.close"))
             .accessibilityIdentifier("workshopClose")
         }
+    }
+
+    /// Support remains available after purchase, inside the Workshop's own
+    /// scrolling content. Keeping these links out of the fixed header leaves
+    /// the title and close control enough room at accessibility text sizes.
+    /// The framed labels, rather than the shorthand `Link` initializer, make
+    /// the complete 44-point targets visible to the accessibility system.
+    private var supportLinks: some View {
+        HStack(spacing: 8) {
+            Link(destination: supportURL) {
+                Text("paywall.link.support")
+                    .underline()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("workshopSupportLink")
+            Link(destination: privacyURL) {
+                Text("paywall.link.privacy")
+                    .underline()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("workshopPrivacyLink")
+        }
+        .font(.footnote)
+        .foregroundStyle(WorkshopPalette.instrument)
+        .tint(WorkshopPalette.instrument)
     }
 
     private var rewindSection: some View {
@@ -725,6 +776,14 @@ private struct WorkshopOverlay: View {
         Text(key)
             .font(.subheadline.bold())
             .foregroundStyle(WorkshopPalette.instrument)
+    }
+
+    private var privacyURL: URL {
+        URL(string: WorkshopCatalog.privacyURL) ?? URL(fileURLWithPath: "/")
+    }
+
+    private var supportURL: URL {
+        URL(string: WorkshopCatalog.supportURL) ?? URL(fileURLWithPath: "/")
     }
 
     /// The sheet is a full modal over a black scrim, so it takes the room it

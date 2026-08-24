@@ -458,9 +458,12 @@ platform :ios do
     %w[
       fastlane/release_support_test.rb
       scripts/app_store/client_test.rb
+      scripts/app_store/game_center_contract_test.rb
       scripts/app_store/adopt_media_test.rb
       scripts/app_store/metadata_pretransport_recovery_test.rb
+      scripts/app_store/rejected_submission_recovery_test.rb
       scripts/app_store/setup_asc_test.rb
+      scripts/app_store/status_test.rb
       scripts/app_store/wait_for_state_test.rb
       scripts/app_store/release_pipeline_contract_test.rb
     ].each do |relative|
@@ -719,7 +722,7 @@ platform :ios do
     NovaStationPinballReleaseSupport.mark_observed!(**upload_proof)
   end
 
-  desc "Submit the exact selected build and the reviewable versions of the declared in-app purchases at most once"
+  desc "Submit the exact build, Game Center leaderboard and reviewable in-app purchase versions at most once"
   lane :submit_review do
     nova_run_asc_tool(
       "review_submission",

@@ -34,6 +34,11 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_equal "FRA", config.fetch("pricing").fetch("territory")
     assert_equal "EUR", config.fetch("pricing").fetch("currency")
     refute_empty config.fetch("pricing").fetch("readback_contract")
+    leaderboards = NovaStationPinballReviewSubmission.declared_leaderboards(config)
+    assert_equal ["nova-station-high-score"], config.fetch("leaderboard_ids")
+    assert_equal ["nova-station-high-score"],
+                 leaderboards.map { |definition| definition.fetch("id") }
+    assert_equal 999_999_999, leaderboards.first.fetch("score_range_end")
 
     pipeline = config.fetch("release_pipeline")
     assert_equal 1, pipeline.fetch("schema_version")
@@ -51,10 +56,13 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     end
     refute pipeline.key?("simulator_requirements"),
            "Nova owns its fixed-pool leases inside the app-local generator"
-    assert_equal "fastlane/media_adoption_contract.json",
-                 pipeline.fetch("media_adoption_contract")
-    assert_equal "adopt_media", pipeline.fetch("media_adoption_lane")
+    refute pipeline.key?("media_adoption_contract"),
+           "a historical adoption contract must not hijack a new release run"
+    refute pipeline.key?("media_adoption_lane"),
+           "new runs must regenerate from media_inputs when the product changed"
 
+    # This remains an immutable proof of the previously validated 1.0 media. It is
+    # deliberately no longer selected by release_config for a fresh build-2 run.
     contract = JSON.parse(
       File.binread(File.join(ROOT, "fastlane", "media_adoption_contract.json"))
     )
@@ -232,7 +240,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     helpers = %w[
       client.rb metadata_readback.rb status.rb wait_for_state.rb select_build.rb
       review_submission.rb setup_asc.rb pricing.rb iap_status.rb iap_sync.rb
-      metadata_pretransport_recovery.rb
+      metadata_pretransport_recovery.rb rejected_submission_recovery.rb
     ]
     helpers.each do |name|
       path = File.join(ROOT, "scripts", "app_store", name)
@@ -249,6 +257,11 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_includes status, '"previews_complete"'
     assert_includes status, '"pricing"'
     assert_includes status, '"iap"'
+    assert_includes status, '"game_center"'
+    assert_includes status, "gameCenterLeaderboardVersion"
+    assert_includes status, "app_version_enabled!"
+    assert_includes status, '"app_version" => game_center_app_version'
+    assert_includes status, "required_review_resources"
 
     select = File.binread(File.join(ROOT, "scripts", "app_store", "select_build.rb"))
     assert_includes select, "NovaStationPinballReleaseSupport.transport_once!"
@@ -259,14 +272,64 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_includes submit, "NovaStationPinballReleaseSupport.transport_once!"
     assert_includes submit, "NovaStationPinballReleaseSupport.mark_observed!"
     assert_includes submit, "review_submitted?"
+    assert_includes submit, "gameCenterLeaderboardVersions"
+    assert_includes submit, "gameCenterLeaderboardVersion"
+    assert_includes submit, "app_version_enabled!"
+    assert_includes submit, "validate_retired_products!"
+    assert_includes submit, "RetiredIapReadback.exact!"
+
+    setup = File.binread(File.join(ROOT, "scripts", "app_store", "setup_asc.rb"))
+    assert_includes setup, 'kind: "setup_asc"'
+    assert_includes setup, "NovaStationPinballReleaseSupport.transport_once!"
+    assert_includes setup, "NovaStationPinballReleaseSupport.mark_observed!"
+    assert_includes setup, "apply_run_id!"
+    assert_includes setup, "formatterOverride: nil"
+    assert_includes setup, 'description: localization.fetch("description")'
+    assert_includes setup, "app_version_enabled!"
+    refute_includes setup, 'client.post("/v2/gameCenterLeaderboardVersions"'
+    refute_match(/client\.patch\([^\n]*gameCenter/, setup)
+
+    game_center_contract = File.binread(
+      File.join(ROOT, "scripts", "app_store", "game_center_contract.rb")
+    )
+    assert_includes game_center_contract,
+                    '"description" => attributes["description"]'
   end
 
   # A stub App Store Connect: the only thing the submission path is allowed to
   # know about the purchase catalogue is what the release configuration says.
   class StubClient
-    def initialize(purchases:, versions:)
+    def initialize(purchases:, versions:, availabilities: {})
       @purchases = purchases
       @versions = versions
+      @availabilities = availabilities
+    end
+
+    def get(path, _query = {}, optional: false)
+      case path
+      when %r{\A/v2/inAppPurchases/([^/]+)/inAppPurchaseAvailability\z}
+        availability = @availabilities[Regexp.last_match(1)]
+        return nil if availability.nil? && optional
+        raise "missing availability" unless availability
+
+        {
+          "data" => {
+            "id" => availability.fetch("id"),
+            "type" => "inAppPurchaseAvailabilities",
+            "attributes" => {
+              "availableInNewTerritories" =>
+                availability.fetch("available_in_new_territories")
+            }
+          }
+        }
+      when %r{\A/v2/inAppPurchases/([^/]+)\z}
+        purchase = @purchases.find { |item| item.fetch("id") == Regexp.last_match(1) }
+        raise "missing purchase" unless purchase
+
+        { "data" => purchase }
+      else
+        raise "unexpected request: #{path}"
+      end
     end
 
     def get_all(path, _query = {})
@@ -275,6 +338,13 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
         { "data" => @purchases }
       when %r{\A/v2/inAppPurchases/([^/]+)/versions\z}
         { "data" => @versions.fetch(Regexp.last_match(1), []) }
+      when %r{\A/v1/inAppPurchaseAvailabilities/([^/]+)/availableTerritories\z}
+        availability = @availabilities.values.find do |item|
+          item.fetch("id") == Regexp.last_match(1)
+        end
+        raise "missing availability" unless availability
+
+        { "data" => availability.fetch("territories") }
       else
         raise "unexpected request: #{path}"
       end
@@ -312,6 +382,16 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     )
   end
 
+  def retired_availabilities(purchases, available: false, territories: [])
+    purchases.each_with_object({}) do |item, result|
+      result[item.fetch("id")] = {
+        "id" => "availability-#{item.fetch('id')}",
+        "available_in_new_territories" => available,
+        "territories" => territories
+      }
+    end
+  end
+
   # Regression guarded here: the shipped release sells a non-consumable
   # unlock, and the submission path must carry it instead of raising about the
   # removed jar.
@@ -332,10 +412,129 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
            "a product App Store Connect has never approved must ride with the version"
     assert record.fetch("required")
 
-    required = NovaStationPinballReviewSubmission.required_resources("v-1", records)
+    required = NovaStationPinballReviewSubmission.required_resources(
+      "v-1", records, [{ "version_id" => "gcv-1" }]
+    )
     assert_equal [
-      ["appStoreVersions", "v-1"], ["inAppPurchaseVersions", "iapv-1"]
+      ["appStoreVersions", "v-1"],
+      ["gameCenterLeaderboardVersions", "gcv-1"],
+      ["inAppPurchaseVersions", "iapv-1"]
     ], required
+  end
+
+  def test_submission_refuses_until_every_retired_tip_matches_its_target_state
+    config = JSON.parse(File.binread(CONFIG_PATH))
+    retired = NovaStationPinballReviewSubmission.declared_retired_products(config)
+    ready = retired.map.with_index do |product, index|
+      purchase(
+        id: "retired-#{index}", product_id: product.fetch("product_id"),
+        type: product.fetch("type"), state: "READY_TO_SUBMIT"
+      )
+    end
+    client = StubClient.new(purchases: ready, versions: {})
+
+    error = assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.validate_retired_products!(
+        client, "app-1", retired
+      )
+    end
+    assert_includes error.message, "READY_TO_SUBMIT"
+    assert_includes error.message, "DEVELOPER_REMOVED_FROM_SALE"
+
+    removed = ready.map do |item|
+      copy = Marshal.load(Marshal.dump(item))
+      copy["attributes"]["state"] = "DEVELOPER_REMOVED_FROM_SALE"
+      copy
+    end
+    missing_error = assert_raises(
+      NovaStationPinballRejectedSubmissionRecovery::Error
+    ) do
+      NovaStationPinballReviewSubmission.validate_retired_products!(
+        StubClient.new(purchases: removed, versions: {}), "app-1", retired
+      )
+    end
+    assert_includes missing_error.message, "exact type, state, availability"
+
+    exact_availabilities = retired_availabilities(removed)
+    NovaStationPinballReviewSubmission.validate_retired_products!(
+      StubClient.new(
+        purchases: removed, versions: {},
+        availabilities: exact_availabilities
+      ),
+      "app-1", retired
+    )
+
+    true_error = assert_raises(
+      NovaStationPinballRejectedSubmissionRecovery::Error
+    ) do
+      NovaStationPinballReviewSubmission.validate_retired_products!(
+        StubClient.new(
+          purchases: removed, versions: {},
+          availabilities: retired_availabilities(removed, available: true)
+        ),
+        "app-1", retired
+      )
+    end
+    assert_includes true_error.message, "availability and territories"
+
+    territory_error = assert_raises(
+      NovaStationPinballRejectedSubmissionRecovery::Error
+    ) do
+      NovaStationPinballReviewSubmission.validate_retired_products!(
+        StubClient.new(
+          purchases: removed, versions: {},
+          availabilities: retired_availabilities(
+            removed, territories: [{ "type" => "territories", "id" => "FRA" }]
+          )
+        ),
+        "app-1", retired
+      )
+    end
+    assert_includes territory_error.message, "availability and territories"
+  end
+
+  def test_review_item_readback_accepts_exactly_app_leaderboard_or_iap
+    assert_equal "gameCenterLeaderboardVersion",
+                 NovaStationPinballReviewSubmission.review_item_relationship(
+                   "gameCenterLeaderboardVersions"
+                 )
+    resources = [
+      ["appStoreVersion", "appStoreVersions", "v-1"],
+      [
+        "gameCenterLeaderboardVersion", "gameCenterLeaderboardVersions", "gcv-1"
+      ],
+      ["inAppPurchaseVersion", "inAppPurchaseVersions", "iapv-1"]
+    ].map.with_index do |(relationship, type, id), index|
+      item = {
+        "id" => "item-#{index}",
+        "relationships" => {
+          relationship => { "data" => { "type" => type, "id" => id } }
+        }
+      }
+      NovaStationPinballReviewSubmission.review_item_resource!(item)
+    end
+    assert_equal [
+      ["appStoreVersions", "v-1"],
+      ["gameCenterLeaderboardVersions", "gcv-1"],
+      ["inAppPurchaseVersions", "iapv-1"]
+    ], resources
+
+    ambiguous = {
+      "id" => "ambiguous",
+      "relationships" => {
+        "appStoreVersion" => {
+          "data" => { "type" => "appStoreVersions", "id" => "v-1" }
+        },
+        "gameCenterLeaderboardVersion" => {
+          "data" => {
+            "type" => "gameCenterLeaderboardVersions", "id" => "gcv-1"
+          }
+        }
+      }
+    }
+    assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.review_item_resource!(ambiguous)
+    end
   end
 
   def test_the_submission_path_reports_a_type_mismatch_against_the_configuration

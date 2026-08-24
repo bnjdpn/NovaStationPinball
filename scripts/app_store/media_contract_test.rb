@@ -513,6 +513,12 @@ class NovaStationMediaContractTest < Minitest::Test
       refute_nil index, "missing ffmpeg flag #{flag}"
       assert_equal value, arguments[index + 1]
     end
+    ignore_dts = arguments.index("-fflags")
+    input = arguments.index("-i")
+    refute_nil ignore_dts
+    refute_nil input
+    assert_equal "+igndts", arguments[ignore_dts + 1]
+    assert_operator ignore_dts, :<, input
     assert_includes arguments.fetch(arguments.index("-vf") + 1), "fps=30"
     assert_includes arguments.fetch(arguments.index("-vf") + 1), "tpad=stop_mode=clone:stop_duration=0.000000"
     assert_includes arguments.fetch(arguments.index("-vf") + 1), "trim=end_frame=720"
@@ -680,6 +686,74 @@ class NovaStationMediaContractTest < Minitest::Test
     assert_equal "2.815", long_arguments.fetch(long_arguments.index("-ss") + 1)
   end
 
+  def test_raw_frame_timeline_ignores_dts_accepts_held_frames_and_rejects_pts_regressions
+    status = Struct.new(:success?)
+    runner = Struct.new(:payload, :status, :calls) do
+      def capture(*arguments)
+        calls&.push(arguments)
+        [JSON.generate("frames" => payload), "", status]
+      end
+    end
+
+    monotonic = (0...720).map do |index|
+      { "best_effort_timestamp_time" => format("%.6f", index / 30.0) }
+    end
+    probe_runner = runner.new(monotonic, status.new(true), [])
+    assert NovaStationPinballPreviewGeneration::RawFrameTimeline.validate!(
+      "/tmp/monotonic.mov", runner: probe_runner
+    )
+    probe_arguments = probe_runner.calls.fetch(0)
+    ignore_dts = probe_arguments.index("-fflags")
+    refute_nil ignore_dts
+    assert_equal "+igndts", probe_arguments[ignore_dts + 1]
+    assert_operator ignore_dts, :<, probe_arguments.index("/tmp/monotonic.mov")
+
+    held_frame = monotonic.map(&:dup)
+    held_frame[584]["best_effort_timestamp_time"] = held_frame[583]["best_effort_timestamp_time"]
+    assert NovaStationPinballPreviewGeneration::RawFrameTimeline.validate!(
+      "/tmp/held-frame.mov", runner: runner.new(held_frame, status.new(true))
+    )
+
+    regressed = monotonic.map(&:dup)
+    regressed[16]["best_effort_timestamp_time"] = "-2.948333"
+    error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+      NovaStationPinballPreviewGeneration::RawFrameTimeline.validate!(
+        "/tmp/regressed.mov", runner: runner.new(regressed, status.new(true))
+      )
+    end
+    assert_includes error.message, "must be non-negative"
+
+    positive_regression = monotonic.map(&:dup)
+    positive_regression[584]["best_effort_timestamp_time"] = format("%.6f", (583 / 30.0) - 0.001)
+    error = assert_raises(NovaStationPinballMediaContract::ContractError) do
+      NovaStationPinballPreviewGeneration::RawFrameTimeline.validate!(
+        "/tmp/positive-regression.mov", runner: runner.new(positive_regression, status.new(true))
+      )
+    end
+    assert_includes error.message, "timestamps regress"
+    assert_includes error.message, "frame 584"
+  end
+
+  def test_preview_capture_retries_are_bounded_and_use_isolated_scratch_roots
+    assert_equal 5, NovaStationPinballPreviewGeneration::Generator::MAX_RAW_CAPTURE_ATTEMPTS
+    source = File.read(PREVIEW_IMPLEMENTATION, encoding: "UTF-8")
+    assert_includes source, "1.upto(MAX_RAW_CAPTURE_ATTEMPTS)"
+    assert_includes source, "rescue RawFrameTimelineError"
+    assert_includes source, "attempt: attempt"
+
+    configuration = NovaStationPinballMediaGeneration::Configuration.allocate
+    configuration.instance_variable_set(:@locales, ["en-US"])
+    configuration.instance_variable_set(:@execution_id, "bounded-attempts")
+    configuration.instance_variable_set(:@udids, { "iphone-se-3" => "A" * 36 })
+    root = configuration.scratch_root(
+      "/unused", "en-US", "iphone-se-3", :app_previews, attempt: 3
+    )
+    assert_equal(
+      "/private/tmp/apps-factory/NovaStationPinball/bounded-attempts/app_previews/en-US/iphone-se-3/capture-attempt-3",
+      root
+    )
+  end
+
   def test_capture_window_wait_targets_cover_the_short_en_se_and_ipad_regression
     window = NovaStationPinballPreviewGeneration::CaptureWindow
 
@@ -731,7 +805,11 @@ class NovaStationMediaContractTest < Minitest::Test
     assert_operator source.index('wait_for!("ready"'), :<, source.index("recordVideo")
     readiness = source.rindex("wait_until_writing!")
     refute_nil readiness, "recorder readiness must precede the app recording marker"
-    assert_operator readiness, :<, source.index('write!("recording"')
+    warmup = source.index("minimum_duration: CaptureWindow::RECORDER_WARMUP_SECONDS")
+    refute_nil warmup, "recorder readiness must be followed by a bounded warm-up"
+    assert_equal 5.0, NovaStationPinballPreviewGeneration::CaptureWindow::RECORDER_WARMUP_SECONDS
+    assert_operator readiness, :<, warmup
+    assert_operator warmup, :<, source.index('write!("recording"')
     assert_operator source.index('write!("recording"'), :<, source.index('wait_for!("started"')
     raw_tail_wait = source.rindex("recorder.wait_until_elapsed!")
     assert_operator source.index('wait_for!("complete"'), :<, raw_tail_wait
@@ -745,6 +823,9 @@ class NovaStationMediaContractTest < Minitest::Test
     assert_includes ui_source, "initialDelaySeconds: TimeInterval = 30"
     assert_includes ui_source, "requiredContinuousAbsenceSeconds: TimeInterval = 5"
     assert_includes ui_source, "maximumObservationSeconds: TimeInterval = 30"
+    assert_includes ui_source, '"media.timeline.started"'
+    assert_operator ui_source.index('"media.timeline.started"'), :<,
+                    ui_source.index("for scenario in scenarios")
     assert_operator ui_source.index("guard waitForSpringBoardToSettle()"), :<,
                     ui_source.index("let app = XCUIApplication()")
     assert_includes generation, "build-for-testing"
@@ -757,6 +838,10 @@ class NovaStationMediaContractTest < Minitest::Test
     refute_nil mark_index
     assert_operator guard_index, :<, mark_index
     assert_includes source, "timeout: 90.0"
+    assert_includes source, "RawFrameTimeline.validate!"
+    assert_includes source, '"--codec=hevc"'
+    assert_includes source, '"-c:v", "libx264"'
+    refute_includes source, '"--codec=h264"'
   end
 
   def test_recorder_readiness_requires_the_exact_live_pid_and_growing_nonempty_file

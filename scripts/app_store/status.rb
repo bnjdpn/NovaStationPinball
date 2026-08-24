@@ -6,16 +6,16 @@ require "json"
 require "optparse"
 require "time"
 require_relative "client"
+require_relative "game_center_contract"
 require_relative "metadata_readback"
+require_relative "review_submission"
 require_relative "../../fastlane/release_support"
 
 module NovaStationPinballAscStatus
   APP_ROOT = File.expand_path("../..", __dir__)
   SCREENSHOTS_PER_LOCALE = 18
   PREVIEWS_PER_LOCALE = 3
-  SUBMITTED_STATES = %w[
-    WAITING_FOR_REVIEW IN_REVIEW UNRESOLVED_ISSUES
-  ].freeze
+  SUBMITTED_STATES = %w[WAITING_FOR_REVIEW IN_REVIEW].freeze
 
   module_function
 
@@ -122,10 +122,12 @@ module NovaStationPinballAscStatus
       items = client.get_all(
         "/v1/reviewSubmissions/#{submission.fetch('id')}/items",
         {
-          "include" => "appStoreVersion,inAppPurchaseVersion",
+          "include" =>
+            "appStoreVersion,gameCenterLeaderboardVersion,inAppPurchaseVersion",
           "fields[reviewSubmissionItems]" =>
-            "state,appStoreVersion,inAppPurchaseVersion",
+            "state,appStoreVersion,gameCenterLeaderboardVersion,inAppPurchaseVersion",
           "fields[appStoreVersions]" => "versionString,appStoreState,platform",
+          "fields[gameCenterLeaderboardVersions]" => "version,state",
           "fields[inAppPurchaseVersions]" => "version,state",
           "limit" => "200"
         }
@@ -136,19 +138,18 @@ module NovaStationPinballAscStatus
         "state" => submission.dig("attributes", "state"),
         "submitted" => submission.dig("attributes", "submittedDate"),
         "items" => items.fetch("data").map do |item|
-          app_version = item.dig(
-            "relationships", "appStoreVersion", "data"
-          )
-          iap_version = item.dig(
-            "relationships", "inAppPurchaseVersion", "data"
-          )
+          resource_type, resource_id =
+            NovaStationPinballReviewSubmission.review_item_resource!(item)
+          app_version = if resource_type == "appStoreVersions"
+                          { "type" => resource_type, "id" => resource_id }
+                        end
           version_resource = app_version &&
             included[[app_version.fetch("type"), app_version.fetch("id")]]
           {
             "id" => item.fetch("id"),
             "state" => item.dig("attributes", "state"),
-            "resource_type" => (app_version || iap_version)&.fetch("type", nil),
-            "resource_id" => (app_version || iap_version)&.fetch("id", nil),
+            "resource_type" => resource_type,
+            "resource_id" => resource_id,
             "version" => version_resource&.dig("attributes", "versionString")
           }
         end
@@ -373,22 +374,49 @@ module NovaStationPinballAscStatus
   end
 
   def submitted?(payload, version_string)
-    version_submitted = payload.dig("version", "version").to_s ==
-      version_string.to_s &&
-      SUBMITTED_STATES.include?(payload.dig("version", "state"))
-    submission = payload.fetch("review_submissions", []).any? do |item|
-      SUBMITTED_STATES.include?(item["state"]) &&
-        item.fetch("items", []).any? do |review_item|
-          review_item["version"].to_s == version_string.to_s
-        end
+    return false unless payload.dig("version", "version").to_s == version_string.to_s
+
+    required = payload.fetch("required_review_resources", [])
+    return false if required.empty?
+
+    payload.fetch("review_submissions", []).any? do |submission|
+      resources = submission.fetch("items", []).map do |item|
+        [item["resource_type"], item["resource_id"]]
+      end
+      SUBMITTED_STATES.include?(submission["state"]) &&
+        (required - resources).empty?
     end
-    version_submitted || submission
   end
 
   def read(client:, config:, environment: ENV)
     app = find_app(client, config.fetch("bundle_id"))
     version, included = versions(client, app.fetch("id"), config.fetch("version"))
+    raise "App Store version #{config.fetch('version')} is missing" unless version
+
+    game_center_app_version =
+      NovaStationPinballGameCenterContract.app_version_enabled!(
+        client: client, app_store_version_id: version.fetch("id")
+      )
     info = app_info(client, app.fetch("id"))
+    leaderboard_definitions =
+      NovaStationPinballGameCenterContract.declared(config)
+    leaderboard_records =
+      NovaStationPinballReviewSubmission.leaderboard_submission_records(
+        client, app.fetch("id"), leaderboard_definitions
+      )
+    product_records =
+      NovaStationPinballReviewSubmission.product_submission_records(
+        client, app.fetch("id"),
+        NovaStationPinballReviewSubmission.declared_products(config)
+      )
+    required_review_resources = if version
+                                  NovaStationPinballReviewSubmission.required_resources(
+                                    version.fetch("id"), product_records,
+                                    leaderboard_records
+                                  )
+                                else
+                                  []
+                                end
     payload = {
       "app" => {
         "id" => app.fetch("id"),
@@ -410,6 +438,13 @@ module NovaStationPinballAscStatus
         client, app.fetch("id"), config.fetch("version")
       ),
       "review_submissions" => review_submissions(client, app.fetch("id")),
+      "required_review_resources" => required_review_resources,
+      "game_center" => {
+        "expected_count" => leaderboard_definitions.length,
+        "actual_count" => leaderboard_records.length,
+        "app_version" => game_center_app_version,
+        "items" => leaderboard_records
+      },
       "assets" => assets(
         client, version, config.dig("release_pipeline", "metadata_locales")
       ),
@@ -442,6 +477,12 @@ module NovaStationPinballAscStatus
     puts "Media: screenshots=#{assets['screenshot_count']} complete=#{assets['screenshots_complete']} previews=#{assets['preview_count']} complete=#{assets['previews_complete']}"
     puts "Pricing: #{payload.dig('pricing', 'current_price')} #{payload.dig('pricing', 'base_currency')} matches_configured=#{payload.dig('pricing', 'matches_configured_price')}"
     puts "IAP: expected=#{payload.dig('iap', 'expected_count')} actual=#{payload.dig('iap', 'actual_count')}"
+    game_center = payload.fetch("game_center")
+    puts "Game Center: enabled=#{game_center.dig('app_version', 'enabled')} " \
+         "expected=#{game_center['expected_count']} actual=#{game_center['actual_count']}"
+    game_center.fetch("items").each do |item|
+      puts "  #{item['vendor_id']}: version=#{item['version']} state=#{item['state']} locales=#{item['localizations'].map { |localization| localization['locale'] }.join(',')}"
+    end
     puts "Metadata complete: #{payload.dig('metadata', 'complete')}"
   end
 end

@@ -3,7 +3,9 @@ import XCTest
 extension XCTestCase {
     /// The Workshop list is taller than its own viewport, so a row has to be
     /// brought inside that viewport before it can be tapped. Dragging without
-    /// a flick keeps every step small enough not to jump over the row.
+    /// a flick keeps every step deterministic. Each move is exactly half of
+    /// the viewport: a tall Dynamic Type row can therefore cross either edge
+    /// without oscillating from wholly above to wholly below the viewport.
     @MainActor
     func scrollIntoView(
         _ element: XCUIElement,
@@ -17,8 +19,8 @@ extension XCTestCase {
             let centre = CGPoint(x: element.frame.midX, y: element.frame.midY)
             if viewport.contains(centre) { return }
             let below = centre.y > viewport.midY
-            let from = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: below ? 0.9 : 0.1))
-            let to = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: below ? 0.1 : 0.9))
+            let from = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: below ? 0.75 : 0.25))
+            let to = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: below ? 0.25 : 0.75))
             from.press(forDuration: 0.08, thenDragTo: to)
         }
         XCTFail(

@@ -82,6 +82,7 @@
 
     <section id="contact" class="station-support" aria-labelledby="contact-title">
       <header><p><%= h(ui.fetch("human_support")) %></p><h2 id="contact-title"><%= h(ui.fetch("contact_heading")) %></h2><p><%= h(ui.fetch("contact_intro")) %></p></header>
+      <p><%= h(support_privacy_notice) %> <a href="<%= h(privacy_url) %>"><%= h(ui.fetch("privacy")) %></a></p>
       <form class="support-form" action="https://formspree.io/f/mykqbyyw" method="POST" data-sending="<%= h(ui.fetch("sending")) %>" data-success="<%= h(ui.fetch("success")) %>" data-error="<%= h(ui.fetch("error")) %>">
         <input type="hidden" name="app" value="<%= h(app_name) %>"><input type="hidden" name="_subject" value="<%= h(app_name) %> support request">
         <label class="honeypot" aria-hidden="true">Leave empty<input type="text" name="_gotcha" tabindex="-1" autocomplete="off"></label>

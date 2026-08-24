@@ -2,7 +2,7 @@
   "app_name": "Nova Station Pinball",
   "app_slug": "NovaStationPinball",
   "app_store_name": "Nova Station Pinball",
-  "version": "1.1",
+  "version": "1.0",
   "project": "NovaStationPinball.xcodeproj",
   "scheme": "NovaStationPinball",
   "team_id": "767SX34A7Z",
@@ -36,24 +36,55 @@
       "type": "NON_CONSUMABLE"
     }
   ],
+  "leaderboard_ids": [
+    "nova-station-high-score"
+  ],
+  "leaderboards": [
+    {
+      "id": "nova-station-high-score",
+      "reference_name": "Nova Station High Score",
+      "default_formatter": "INTEGER",
+      "submission_type": "BEST_SCORE",
+      "score_sort_type": "DESC",
+      "score_range_start": 0,
+      "score_range_end": 999999999,
+      "recurrence_start_date": null,
+      "recurrence_duration": null,
+      "recurrence_rule": null,
+      "localizations": {
+        "en-US": {
+          "name": "Nova Station High Scores",
+          "description": "Highest score from a standard game. Runs using Workshop tools are excluded.",
+          "suffix": "points",
+          "singular_suffix": "point"
+        },
+        "fr-FR": {
+          "name": "Scores de Nova Station",
+          "description": "Meilleur score d’une partie standard. Les parties utilisant l’Atelier sont exclues.",
+          "suffix": "points",
+          "singular_suffix": "point"
+        }
+      }
+    }
+  ],
   "retired_iap_products": [
     {
       "product_id": "com.bnjdpn.NovaStationPinball.tip.cafe",
       "type": "CONSUMABLE",
       "target_state": "DEVELOPER_REMOVED_FROM_SALE",
-      "retired_in": "1.1"
+      "retired_in": "1.0 (build 2)"
     },
     {
       "product_id": "com.bnjdpn.NovaStationPinball.tip.merci",
       "type": "CONSUMABLE",
       "target_state": "DEVELOPER_REMOVED_FROM_SALE",
-      "retired_in": "1.1"
+      "retired_in": "1.0 (build 2)"
     },
     {
       "product_id": "com.bnjdpn.NovaStationPinball.tip.soutien",
       "type": "CONSUMABLE",
       "target_state": "DEVELOPER_REMOVED_FROM_SALE",
-      "retired_in": "1.1"
+      "retired_in": "1.0 (build 2)"
     }
   ],
   "monetization_strategy": {
@@ -84,7 +115,7 @@
     "tips_removed_on": "2026-08-19",
     "tips_asc_action": "com.bnjdpn.NovaStationPinball.tip.cafe, .tip.merci and .tip.soutien must be set to DEVELOPER_REMOVED_FROM_SALE in App Store Connect",
     "leaderboard_integrity": "runs that used the Workshop are ranked on a separate local training board and are never submitted to Game Center",
-    "grandfathering": "device-local founder flag detected once, before any write of the new build, from the 1.0 usage signals; it grants 10 free rewinds per game and is never revoked"
+    "grandfathering": "defensive pre-release migration: device-local founder flag detected once, before any write of build 2, from rejected build-1 usage signals; it grants 10 free rewinds per game and is never revoked; a fresh install never receives it"
   },
   "app_preview_policy": {
     "applicable": true,
@@ -142,8 +173,6 @@
         "reason": "not_configured_not_mutated"
       }
     ],
-    "media_adoption_contract": "fastlane/media_adoption_contract.json",
-    "media_adoption_lane": "adopt_media",
     "iap_readback_contract": "exact-v1",
     "content_rights_readback_contract": "exact-v1"
   }

@@ -1,5 +1,6 @@
 import Foundation
 
+#if DEBUG
 enum MediaPreviewHandshakeError: Error {
     case cachesDirectoryUnavailable
     case timedOut(String)
@@ -62,3 +63,4 @@ struct MediaPreviewHandshake {
         directory.appendingPathComponent(name, isDirectory: false)
     }
 }
+#endif

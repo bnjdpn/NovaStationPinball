@@ -47,6 +47,44 @@ class NovaStationPinballStateWaiterTest < Minitest::Test
     assert_equal 2, reads
   end
 
+  def test_rejected_submission_is_not_reported_as_submitted
+    rejected = payload(build_state: "VALID")
+    rejected.fetch("version")["state"] = "UNRESOLVED_ISSUES"
+    rejected.fetch("review_submissions") << {
+      "state" => "UNRESOLVED_ISSUES",
+      "items" => [{ "version" => "1.0" }]
+    }
+
+    refute NovaStationPinballStateWaiter.complete?(
+      rejected, "submitted", version: "1.0"
+    )
+  end
+
+  def test_submitted_requires_the_app_leaderboard_and_workshop_resources
+    submitted = payload(build_state: "VALID")
+    submitted.fetch("version")["state"] = "WAITING_FOR_REVIEW"
+    resources = [
+      ["appStoreVersions", "version-1"],
+      ["gameCenterLeaderboardVersions", "leaderboard-version-1"],
+      ["inAppPurchaseVersions", "workshop-version-1"]
+    ]
+    submitted["required_review_resources"] = resources
+    submitted.fetch("review_submissions") << {
+      "state" => "WAITING_FOR_REVIEW",
+      "items" => resources.map do |type, id|
+        { "resource_type" => type, "resource_id" => id }
+      end
+    }
+
+    assert NovaStationPinballStateWaiter.complete?(
+      submitted, "submitted", version: "1.0"
+    )
+    submitted.fetch("review_submissions").first.fetch("items").delete_at(1)
+    refute NovaStationPinballStateWaiter.complete?(
+      submitted, "submitted", version: "1.0"
+    )
+  end
+
   private
 
   def payload(build_state:)

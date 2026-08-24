@@ -4,7 +4,7 @@
   "bundle_id": "com.bnjdpn.NovaStationPinball",
   "base_territory": "FRA",
   "base_currency": "EUR",
-  "notes": "Source de vérité du produit payant de Nova Station Pinball dans App Store Connect. Le produit n'existe pas encore côté ASC : il doit être créé, attaché au draft de la version 1.1 et propagé par price points + equalizations, puis relu intégralement (VALID ne suffit pas). Limites ASC respectées : display name <= 30 caractères, description <= 45 caractères. Une localisation par locale de la fiche (en-US, fr-FR). Les trois pourboires consommables 1.0 (tip.cafe, tip.merci, tip.soutien) doivent passer en DEVELOPER_REMOVED_FROM_SALE : le binaire 1.1 ne contient plus de tip jar.",
+  "notes": "Source de vérité du produit payant de Nova Station Pinball dans App Store Connect. Le produit Workshop existe côté ASC et sa première version doit être attachée au record 1.0 avec le nouveau build 2, puis relue intégralement (un état READY_TO_SUBMIT ne constitue pas une approbation). Limites ASC respectées : display name <= 30 caractères, description <= 45 caractères. Une localisation par locale de la fiche (en-US, fr-FR). Les trois pourboires consommables présents dans le build 1 rejeté (tip.cafe, tip.merci, tip.soutien) doivent être relus à l’état DEVELOPER_REMOVED_FROM_SALE avant la soumission ; le build 2 ne contient plus de tip jar.",
   "subscription_group": null,
   "products": [
     {
@@ -19,7 +19,7 @@
         "fr-FR": { "name": "L’Atelier", "description": "Rembobinage, revisionnage et atelier de tir." }
       },
       "review_screenshot": "review_assets/workshop_paywall_review.png",
-      "review_notes": "One-time purchase unlocking the Workshop: unlimited ball rewind (-3 s, -5 s, start of ball) with resume in hand, replay from five seconds back at 1x or 0.5x, and 14 shot drills served from an identical state with success rate and best streak. Free for everyone without this purchase: the complete table, the 17 missions, the nine clearance promotions, multiball, tilt, the interactive guide, local high scores, the optional Game Center leaderboard, three rewinds per game and the replay of the ball in play at 1x or 0.5x. Runs that used the Workshop are ranked on a separate local training board and are never submitted to Game Center. Reachable from the Workshop button in the top-right corner of the table, then Unlock the Workshop; also reached when the free rewind allowance for a game is spent or when a shot drill is opened. Reviewer capture: launch the app with the -paywall-screenshot argument to open the paywall directly. The attached screenshot is that paywall, captured by scripts/capture_paywall_review_screenshot.rb on an iPad Pro 13-inch simulator with the store bypass off, so it shows the real locked offer."
+      "review_notes": "One-time purchase unlocking the Workshop: unlimited ball rewind (-3 s, -5 s, start of ball) with resume in hand, replay from five seconds back at 1x or 0.5x, and 14 shot drills served from an identical state with success rate and best streak. Free for everyone without this purchase: the complete table, the 17 missions, the nine clearance promotions, multiball, tilt, the interactive guide, local high scores, the optional Game Center leaderboard, three rewinds per game and the replay of the ball in play at 1x or 0.5x. Runs that used the Workshop are ranked on a separate local training board and are never submitted to Game Center. Reachable from the Workshop button in the top-right corner of the table, then Unlock the Workshop; also reached when the free rewind allowance for a game is spent or when a shot drill is opened. During ordinary review, the submitted app resolves the live StoreKit product. The -paywall-screenshot argument only opens the sheet directly and does not grant ownership. The attached screenshot was captured on an iPad Pro 13-inch simulator by scripts/capture_paywall_review_screenshot.rb using SKTestSession and the checked-in EUR 4.99 test product, with the ownership bypass disabled. The .storekit file is excluded from the app target and is not present in the submitted binary."
     }
   ],
   "removed_from_sale": [
@@ -27,19 +27,19 @@
       "product_id": "com.bnjdpn.NovaStationPinball.tip.cafe",
       "type": "CONSUMABLE",
       "target_state": "DEVELOPER_REMOVED_FROM_SALE",
-      "reason": "Tip jar removed from the binary in 1.1: an app that sells a product no longer asks for tips."
+      "reason": "Tip jar removed from build 2 of version 1.0: an app that sells a product no longer asks for tips."
     },
     {
       "product_id": "com.bnjdpn.NovaStationPinball.tip.merci",
       "type": "CONSUMABLE",
       "target_state": "DEVELOPER_REMOVED_FROM_SALE",
-      "reason": "Tip jar removed from the binary in 1.1: an app that sells a product no longer asks for tips."
+      "reason": "Tip jar removed from build 2 of version 1.0: an app that sells a product no longer asks for tips."
     },
     {
       "product_id": "com.bnjdpn.NovaStationPinball.tip.soutien",
       "type": "CONSUMABLE",
       "target_state": "DEVELOPER_REMOVED_FROM_SALE",
-      "reason": "Tip jar removed from the binary in 1.1: an app that sells a product no longer asks for tips."
+      "reason": "Tip jar removed from build 2 of version 1.0: an app that sells a product no longer asks for tips."
     }
   ]
 }

@@ -107,6 +107,34 @@ class NovaStationPinballReleaseSupportTest < Minitest::Test
     end
   end
 
+  def test_competing_setup_asc_processes_share_the_exclusive_intent
+    skip "fork unavailable" unless Process.respond_to?(:fork)
+
+    Dir.mktmpdir do |root|
+      identity = proof_identity(root, kind: "setup_asc")
+      log = File.join(root, "setup-asc-transport.log")
+      children = 8.times.map do
+        fork do
+          NovaStationPinballReleaseSupport.transport_once!(**identity) do
+            File.open(log, File::WRONLY | File::CREAT | File::APPEND, 0o600) do |file|
+              file.flock(File::LOCK_EX)
+              file.puts(Process.pid)
+            end
+          end
+          exit! 0
+        rescue StandardError
+          exit! 1
+        end
+      end
+      statuses = children.map { |pid| Process.wait2(pid).last }
+
+      assert statuses.all?(&:success?)
+      assert_equal 1, File.readlines(log).length
+      assert File.file?(identity.fetch(:intent_path))
+      refute File.exist?(identity.fetch(:receipt_path))
+    end
+  end
+
   def test_target_build_is_write_once_and_exact
     Dir.mktmpdir do |root|
       path = File.join(root, "logs", "target-build.json")

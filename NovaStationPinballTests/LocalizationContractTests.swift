@@ -73,6 +73,7 @@ final class LocalizationContractTests: XCTestCase {
         "paywall.feature.stats",
         "paywall.free_forever",
         "paywall.link.privacy",
+        "paywall.link.support",
         "paywall.link.terms",
         "paywall.loading",
         "paywall.one_time",
@@ -204,6 +205,20 @@ final class LocalizationContractTests: XCTestCase {
     }
 
 #if !SWIFT_PACKAGE
+    @MainActor
+    func testRasterHUDResolvesDynamicMissionAndClearanceKeys() {
+        let renderer = RasterHUDRenderer()
+        for mission in MissionID.allCases {
+            let key = "mission.\(mission.rawValue)"
+            XCTAssertNotEqual(renderer.localizedMission(mission), key, key)
+        }
+        for clearance in ClearanceLevel.allCases {
+            let key = "clearance.\(clearance.rawValue)"
+            let rendered = renderer.clearanceText(clearance)
+            XCTAssertFalse(rendered.contains(key), rendered)
+        }
+    }
+
     /// Every string that prints a count has to be grammatical at one as well
     /// as at many, in both shipped locales. These are the strings a player
     /// reads on the very first attempt and on the last free rewind.

@@ -2,14 +2,18 @@ import XCTest
 
 @MainActor
 final class StoreScreenshotUITests: XCTestCase {
-    func test01Launch() { capture("launch") }
+    func test01Launch() { capture("launch", checksOwnedWorkshopPrivacy: true) }
     func test02Mission() { capture("mission", opensTableGuide: true) }
     func test03Promotion() { capture("promotion") }
     func test04Multiball() { capture("multiball") }
     func test05Tilt() { capture("tilt") }
     func test06GameOver() { capture("game-over") }
 
-    private func capture(_ scenario: String, opensTableGuide: Bool = false) {
+    private func capture(
+        _ scenario: String,
+        opensTableGuide: Bool = false,
+        checksOwnedWorkshopPrivacy: Bool = false
+    ) {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .landscapeRight
         let app = XCUIApplication()
@@ -34,6 +38,23 @@ final class StoreScreenshotUITests: XCTestCase {
         screenshot.name = "screenshot-\(scenario)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+
+        if checksOwnedWorkshopPrivacy {
+            // `-ui-testing` owns the Workshop through the DEBUG-only bypass.
+            // The privacy policy must therefore remain reachable after a
+            // purchase, not only from the locked paywall.
+            app.buttons["workshopOpen"].tap()
+            let privacy = app.descendants(matching: .any)
+                .matching(identifier: "workshopPrivacyLink")
+                .firstMatch
+            let support = app.descendants(matching: .any)
+                .matching(identifier: "workshopSupportLink")
+                .firstMatch
+            XCTAssertTrue(privacy.waitForExistence(timeout: 3))
+            XCTAssertTrue(privacy.isHittable)
+            XCTAssertTrue(support.waitForExistence(timeout: 3))
+            XCTAssertTrue(support.isHittable)
+        }
     }
 
     private func assertGuideCopyFitsAboveNavigation(in app: XCUIApplication) {

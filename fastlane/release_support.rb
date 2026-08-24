@@ -7,7 +7,7 @@ require "pathname"
 
 module NovaStationPinballReleaseSupport
   KINDS = %w[
-    metadata screenshots previews ipa select_build submit_review
+    metadata screenshots previews ipa select_build submit_review setup_asc
   ].freeze
 
   class AmbiguousTransport < StandardError

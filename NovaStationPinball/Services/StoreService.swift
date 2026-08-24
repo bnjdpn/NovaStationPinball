@@ -19,6 +19,7 @@ enum WorkshopCatalog {
 
     /// Apple's standard EULA, used because the app ships no custom terms.
     static let termsOfUseURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+    static let supportURL = "https://bnjdpn.github.io/NovaStationPinball/#contact"
     static let privacyURL = "https://bnjdpn.github.io/NovaStationPinball/privacy.html"
 }
 
@@ -112,21 +113,27 @@ protocol WorkshopStoreBackend: Sendable {
 }
 
 enum WorkshopStoreBackendFactory {
+#if DEBUG
     static func applicationDefault(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         preferredLanguages: [String] = Locale.preferredLanguages
     ) -> any WorkshopStoreBackend {
-#if DEBUG
         if arguments.contains("-ui-testing"),
            environment["NOVA_STORE_FIXTURE"] == "available" {
             return UITestingWorkshopStoreBackend(
                 languageCode: preferredLanguages.first ?? "en"
             )
         }
-#endif
         return StoreKitWorkshopStoreBackend()
     }
+#else
+    /// The App Store build has no launch-argument or environment-controlled
+    /// backend. Its only application default is the real StoreKit adapter.
+    static func applicationDefault() -> any WorkshopStoreBackend {
+        StoreKitWorkshopStoreBackend()
+    }
+#endif
 }
 
 struct NullWorkshopStoreBackend: WorkshopStoreBackend {
@@ -264,17 +271,23 @@ final class StoreService {
 
     private let backend: any WorkshopStoreBackend
     private let userDefaults: UserDefaults
+#if DEBUG
     private let bypassesStore: Bool
+#endif
     @ObservationIgnored private var transactionUpdatesTask: Task<Void, Never>?
 
+#if DEBUG
     /// UI tests and the screenshot pipeline exercise the Workshop past the
     /// free allowance, with no StoreKit dependency. The paywall capture is
-    /// deliberately excluded: it must show the real locked paywall.
+    /// deliberately excluded: it must show the real locked paywall. This
+    /// entire hook, including its launch-argument strings, is absent from a
+    /// Release/App Store compilation.
     static func isStoreBypassEnabled(
         arguments: [String] = ProcessInfo.processInfo.arguments
     ) -> Bool {
+        guard arguments.contains("-ui-testing") else { return false }
         guard !arguments.contains("-paywall-screenshot") else { return false }
-        return arguments.contains("-ui-testing") || arguments.contains("-screenshots")
+        return true
     }
 
     init(
@@ -286,6 +299,15 @@ final class StoreService {
         self.userDefaults = userDefaults
         self.bypassesStore = bypassesStore
     }
+#else
+    init(
+        backend: any WorkshopStoreBackend = WorkshopStoreBackendFactory.applicationDefault(),
+        userDefaults: UserDefaults = .standard
+    ) {
+        self.backend = backend
+        self.userDefaults = userDefaults
+    }
+#endif
 
     deinit {
         transactionUpdatesTask?.cancel()
@@ -299,7 +321,11 @@ final class StoreService {
     }
 
     var hasWorkshop: Bool {
+#if DEBUG
         bypassesStore || !ownedEntitlementProductIDs.isEmpty
+#else
+        !ownedEntitlementProductIDs.isEmpty
+#endif
     }
 
     /// Free rewinds granted for every single game, forever, with no purchase.
@@ -325,8 +351,13 @@ final class StoreService {
     }
 
     func loadOfferIfNeeded() async {
-        guard loadState == .idle else { return }
+        // `.unavailable` is recoverable. The paywall copy asks the player to
+        // check their connection and reopen the Workshop; reopening creates a
+        // new paywall task and therefore retries this exact load. Available
+        // and in-flight offers remain idempotent.
+        guard loadState == .idle || loadState == .unavailable else { return }
         loadState = .loading
+        offer = nil
         let loaded = await backend.loadOffer()
         offer = loaded
         loadState = loaded == nil ? .unavailable : .available

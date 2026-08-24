@@ -1,23 +1,26 @@
+GUIDELINE 4.3(a) — DISTINCT ORIGINAL PRODUCT
+Nova Station Pinball has no prior READY_FOR_SALE version. Its first submission coincided with monetization updates to unrelated portfolio apps using similar standard StoreKit purchase, restore and legal-link patterns. Those generic patterns do not define Nova: it is an original landscape pinball game with its own table, physics, missions, multiball, clearance progression, shot drills, rewind and replay systems. It is not a duplicate variant of another app. Please clarify which specific element triggered 4.3(a).
+
 Nova Station Pinball is an original single-player pinball game, landscape only, playable offline. Play with the on-screen flippers and the pull-and-release plunger; the interactive table guide is available from the home screen. No account and no demo credentials are required. Game Center is optional and used only for leaderboards; declining Game Center authentication does not block play or local scores.
 
-WHAT THIS VERSION SELLS
-Version 1.1 introduces exactly one in-app purchase: com.bnjdpn.NovaStationPinball.workshop, "The Workshop" / "L'Atelier", a non-consumable one-time purchase. There is no subscription. It grants unlimited ball rewind (-3 s, -5 s, start of ball) with the table handed back in play, the replay of the last five seconds at 1x or 0.5x, and 14 shot drills that serve the ball from an identical state, each with a success rate and a best streak stored on the device.
+WHAT THIS BUILD SELLS
+Build 2 replaces the rejected build 1 of the first App Store version 1.0. It introduces one new feature-unlocking IAP, com.bnjdpn.NovaStationPinball.workshop ("The Workshop" / "L'Atelier"), and removes the three tip IAPs present in rejected build 1. Workshop is the only IAP sold by build 2. It is a non-consumable one-time purchase, never a subscription. It grants unlimited ball rewind (-3 s, -5 s, start of ball) with the table handed back in play, replay of the last five seconds at 1x or 0.5x, and 14 shot drills served from an identical state, each with a success rate and best streak stored on device.
 
 WHERE TO FIND IT
 1. Start a game from the home screen and let the ball reach play.
 2. Tap "Workshop" in the top-right corner of the table.
 3. The Workshop sheet lists Rewind, Watch it again and Shot drills; "Replay this ball" is free, "Replay the last 5 seconds" and the drills require the purchase. Tap "Unlock the Workshop" at the bottom to open the purchase sheet.
-The same purchase sheet also appears when the three free rewinds of a game have been used, and when a locked shot drill is tapped. For a direct capture, launching the app with the -paywall-screenshot argument opens the purchase sheet immediately; this argument does not enable any store fixture, so the real App Store offer is shown.
+The same sheet appears after the three free rewinds are used or when a locked drill is tapped. For review, use the steps above; the submitted app resolves the live App Store product. The -paywall-screenshot argument only opens the sheet and never grants ownership. The attached IAP screenshot was made by an automated UI test using SKTestSession, the checked-in EUR 4.99 test product and ownership bypass off. The .storekit file is excluded from the app target and submitted binary.
 
 The purchase sheet reads its name and price from StoreKit (Product.displayName / Product.displayPrice), states that this is a one-time purchase with nothing to renew and nothing to cancel, and carries a Restore purchase button, the Apple standard EULA link and the privacy policy link.
 
 WHAT REMAINS FREE
-The complete table, the 17 missions, the nine clearance promotions, multiball, tilt and nudge, the interactive guide, the local high scores, the Game Center leaderboard, three ball rewinds per game and the replay of the ball in play at 1x or 0.5x. A device that already ran version 1.0 keeps ten free rewinds per game instead of three; this flag is stored on the device only, is detected from pre-existing 1.0 data, and a fresh install is never treated as such.
+The complete table, 17 missions, nine clearance promotions, multiball, tilt and nudge, the guide, local scores, Game Center leaderboard, three rewinds per game and replay of the current ball at 1x or 0.5x. As a defensive pre-release migration, an installation retaining build-1 usage data keeps ten free rewinds per game. The flag is device-local, detected only from build-1 data; a fresh install never receives it. No Nova version reached READY_FOR_SALE.
 
 LEADERBOARD INTEGRITY
-Any run that used a rewind, a replay or a drill is flagged as assisted and is ranked on a separate local training board; it is never submitted to Game Center. Records created by earlier versions are unchanged.
+Any run that used a rewind, a replay or a drill is flagged as assisted and is ranked on a separate local training board; it is never submitted to Game Center. Records created by an earlier installed build are unchanged.
 
-REMOVED IN THIS VERSION
-The three consumable tips of version 1.0 (tip.cafe, tip.merci, tip.soutien) are gone from the binary; an app that sells a product no longer asks for contributions. They are being removed from sale in App Store Connect. Statements in the 1.0 review notes about optional contributions no longer apply.
+REMOVED IN BUILD 2
+The three consumable tips present in rejected build 1 (tip.cafe, tip.merci, tip.soutien) are gone from the binary; an app that sells a product no longer asks for contributions. They are excluded from this submission. Statements in the build-1 review notes about optional contributions no longer apply.
 
-This version contains no advertising, no analytics, no tracking, no network backend and no account.
+This version contains no advertising, no analytics, no tracking, no developer-operated backend and no app account.

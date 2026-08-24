@@ -7,10 +7,17 @@ require "securerandom"
 require_relative "media_generation"
 
 module NovaStationPinballPreviewGeneration
+  class RawFrameTimelineError < NovaStationPinballMediaContract::ContractError; end
+
   class CaptureWindow
     TIMELINE_SECONDS = 24.0
     FRAME_RATE = 30
     TARGET_FRAME_COUNT = 720
+    # simctl can create and grow the recording file before its first usable
+    # screen frames are committed. Keep the launch scene static for a bounded
+    # pre-roll to reduce that startup risk; the strict raw-frame timeline guard
+    # below remains the acceptance proof for every capture.
+    RECORDER_WARMUP_SECONDS = 5.0
     RAW_TAIL_MARGIN_SECONDS = 1.0
     MAX_FINAL_PADDING_SECONDS = 1.0 / FRAME_RATE
     MAX_TRIM_OFFSET_SECONDS = 45.0
@@ -95,6 +102,46 @@ module NovaStationPinballPreviewGeneration
     end
   end
 
+  class RawFrameTimeline
+    def self.validate!(path, runner: NovaStationPinballMediaGeneration::SystemRunner.new)
+      stdout, stderr, status = runner.capture(
+        "/opt/homebrew/bin/ffprobe", "-fflags", "+igndts", "-v", "error", "-select_streams", "v:0",
+        "-show_frames", "-show_entries", "frame=best_effort_timestamp_time,pts_time",
+        "-of", "json", path
+      )
+      unless status.success?
+        raise RawFrameTimelineError,
+              "raw App Preview frame timeline probe failed: #{stderr.strip}"
+      end
+      frames = JSON.parse(stdout).fetch("frames")
+      timestamps = frames.map do |frame|
+        Float(frame["best_effort_timestamp_time"] || frame.fetch("pts_time"))
+      end
+      unless timestamps.length >= CaptureWindow::TARGET_FRAME_COUNT &&
+             timestamps.all?(&:finite?)
+        raise RawFrameTimelineError,
+              "raw App Preview frame timestamps must be complete and finite"
+      end
+      unless timestamps.all? { |timestamp| timestamp >= 0 }
+        raise RawFrameTimelineError,
+              "raw App Preview frame timestamps must be non-negative"
+      end
+      timestamps.each_cons(2).with_index do |(previous, current), index|
+        next if current >= previous
+
+        raise RawFrameTimelineError,
+              format(
+                "raw App Preview frame timestamps regress at frame %d: %.6f -> %.6f",
+                index + 1, previous, current
+              )
+      end
+      true
+    rescue JSON::ParserError, KeyError, ArgumentError, TypeError
+      raise RawFrameTimelineError,
+            "raw App Preview frame timeline probe returned invalid frames"
+    end
+  end
+
   class EncodedMedia
     Capture3Adapter = Struct.new(:runner) do
       def capture3(*arguments)
@@ -124,7 +171,8 @@ module NovaStationPinballPreviewGeneration
         raise NovaStationPinballMediaContract::ContractError, "invalid residual App Preview padding"
       end
       [
-        "/opt/homebrew/bin/ffmpeg", "-y", "-ss", format("%.3f", trim_offset), "-i", source,
+        "/opt/homebrew/bin/ffmpeg", "-y", "-fflags", "+igndts",
+        "-ss", format("%.3f", trim_offset), "-i", source,
         "-f", "lavfi", "-i",
         "aevalsrc=0.025*sin(2*PI*110*t)+0.015*sin(2*PI*220*t)+0.002*random(0)|0.025*sin(2*PI*110*t)+0.015*sin(2*PI*277.18*t)+0.002*random(1):s=48000:d=24",
         "-map", "0:v:0", "-map", "1:a:0", "-t", "24",
@@ -309,6 +357,7 @@ module NovaStationPinballPreviewGeneration
   end
 
   class Generator < NovaStationPinballMediaGeneration::GeneratorBase
+    MAX_RAW_CAPTURE_ATTEMPTS = 5
     CanonicalTestArtifacts = Struct.new(:derived_data, :xctestrun, keyword_init: true)
 
     def generate!
@@ -373,30 +422,43 @@ module NovaStationPinballPreviewGeneration
     def generate_locale!(locale, device, canonical)
       udid = configuration.udids.fetch(device)
       device_definition = NovaStationPinballMediaContract::DEVICES.find { |candidate| candidate.fetch(:id) == device }
-      scratch = configuration.scratch_root(run_root, locale, device, :app_previews)
-      FileUtils.mkdir_p(scratch)
-      raw = File.join(scratch, "raw.mov")
       destination = File.join(run_root, "app_previews", locale, "NovaStationPinball-#{device}.mov")
       FileUtils.mkdir_p(File.dirname(destination))
-      handshake = handshake_for(udid)
-      capture = capture_after_app_ready!(
-        locale: locale, device: device, raw: raw, scratch: scratch,
-        canonical: canonical, handshake: handshake
-      )
-      trim_offset = capture.fetch(:trim_offset)
-      geometry = transcode!(raw, destination, device, trim_offset)
-      validate_system_overlay!(destination, locale, device)
-      mark_artifact!(
-        locale: locale, device: device, kind: :preview, path: destination,
-        capture_trim_offset: trim_offset,
-        preview_provenance: {
-          "source_sha256" => Digest::SHA256.file(raw).hexdigest,
-          "source_run_id" => configuration.execution_id,
-          "width" => geometry.fetch(0), "height" => geometry.fetch(1),
-          "transform" => device_definition.fetch(:raw_transform), "udid" => udid,
-          "locale" => locale, "handshake_sha256" => capture.fetch(:handshake_sha256)
-        }
-      )
+      1.upto(MAX_RAW_CAPTURE_ATTEMPTS) do |attempt|
+        scratch = configuration.scratch_root(
+          run_root, locale, device, :app_previews, attempt: attempt
+        )
+        FileUtils.mkdir_p(scratch)
+        raw = File.join(scratch, "raw.mov")
+        handshake = handshake_for(udid)
+        begin
+          capture = capture_after_app_ready!(
+            locale: locale, device: device, raw: raw, scratch: scratch,
+            canonical: canonical, handshake: handshake, attempt: attempt
+          )
+          trim_offset = capture.fetch(:trim_offset)
+          geometry = transcode!(raw, destination, device, trim_offset)
+          validate_system_overlay!(destination, locale, device)
+          mark_artifact!(
+            locale: locale, device: device, kind: :preview, path: destination,
+            capture_trim_offset: trim_offset,
+            preview_provenance: {
+              "source_sha256" => Digest::SHA256.file(raw).hexdigest,
+              "source_run_id" => configuration.execution_id,
+              "width" => geometry.fetch(0), "height" => geometry.fetch(1),
+              "transform" => device_definition.fetch(:raw_transform), "udid" => udid,
+              "locale" => locale, "handshake_sha256" => capture.fetch(:handshake_sha256)
+            }
+          )
+          return
+        rescue RawFrameTimelineError => error
+          warn format(
+            "app_previews: %s/%s rejected raw timeline attempt %d/%d: %s",
+            locale, device, attempt, MAX_RAW_CAPTURE_ATTEMPTS, error.message
+          )
+          raise if attempt == MAX_RAW_CAPTURE_ATTEMPTS
+        end
+      end
     end
 
     def handshake_for(udid)
@@ -412,7 +474,7 @@ module NovaStationPinballPreviewGeneration
       )
     end
 
-    def capture_after_app_ready!(locale:, device:, raw:, scratch:, canonical:, handshake:)
+    def capture_after_app_ready!(locale:, device:, raw:, scratch:, canonical:, handshake:, attempt:)
       udid = configuration.udids.fetch(device)
       configured_xctestrun = File.join(scratch, "xctestrun", "NovaStationPinball-AppPreviewUITests.xctestrun")
       NovaStationPinballMediaGeneration::XCTestRunConfigurator.new.inject_environment!(
@@ -426,7 +488,7 @@ module NovaStationPinballPreviewGeneration
       )
       test_arguments = configuration.test_without_building_arguments(
         kind: :app_previews, locale: locale, device: device, run_root: run_root,
-        xctestrun: configured_xctestrun
+        xctestrun: configured_xctestrun, attempt: attempt
       )
       log_path = File.join(scratch, "AppPreviewUITests.log")
       log = File.open(log_path, "wb", 0o600)
@@ -441,11 +503,19 @@ module NovaStationPinballPreviewGeneration
       recorder_log_path = File.join(scratch, "recordVideo.log")
       recorder_log = File.open(recorder_log_path, "wb", 0o600)
       record_pid = Process.spawn(
-        "xcrun", "simctl", "io", udid, "recordVideo", "--codec=h264", "--force", raw,
+        # HEVC is simctl's native default. Its VFR stream can contain DTS values
+        # that are unsuitable as presentation timestamps, so probing and final
+        # transcoding explicitly ignore DTS. The App Store artifact is still
+        # encoded to H.264 below.
+        "xcrun", "simctl", "io", udid, "recordVideo", "--codec=hevc", "--force", raw,
         out: recorder_log, err: [:child, :out]
       )
       recorder = RecorderReadiness.new(path: raw, pid: record_pid)
       recording_origin = recorder.wait_until_writing!
+      recorder.wait_until_elapsed!(
+        recording_origin: recording_origin,
+        minimum_duration: CaptureWindow::RECORDER_WARMUP_SECONDS
+      )
       handshake.write!("recording")
       handshake.wait_for!("started")
       timeline_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -489,6 +559,7 @@ module NovaStationPinballPreviewGeneration
 
     def transcode!(source, destination, device_id, trim_offset)
       device = NovaStationPinballMediaContract::DEVICES.find { |candidate| candidate.fetch(:id) == device_id }
+      RawFrameTimeline.validate!(source, runner: runner)
       geometry = RawGeometry.probe(source, runner: runner)
       RawGeometry.validate!(width: geometry.fetch(0), height: geometry.fetch(1), device: device)
       raw_end = RawTimeline.end_time(source, runner: runner)

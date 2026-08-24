@@ -29,6 +29,15 @@ final class MediaScenarioTests: XCTestCase {
         XCTAssertFalse(MediaLaunchConfiguration(arguments: ["app", "-media-preview-sequence"]).runsPreviewSequence)
     }
 
+    func testPaywallLaunchIsAvailableOnlyToUITests() {
+        XCTAssertTrue(
+            MediaLaunchConfiguration(arguments: ["app", "-ui-testing", "-paywall-screenshot"]).opensPaywall
+        )
+        XCTAssertFalse(
+            MediaLaunchConfiguration(arguments: ["app", "-paywall-screenshot"]).opensPaywall
+        )
+    }
+
     func testPreviewHandshakeRequiresUITestingSequenceAndStrictToken() {
         let token = String(repeating: "a", count: 32)
         XCTAssertEqual(

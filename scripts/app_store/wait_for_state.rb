@@ -36,15 +36,18 @@ module NovaStationPinballStateWaiter
   end
 
   def submitted?(payload, version)
-    states = %w[WAITING_FOR_REVIEW IN_REVIEW UNRESOLVED_ISSUES]
-    version_submitted = payload.dig("version", "version").to_s ==
-      version.to_s && states.include?(payload.dig("version", "state"))
-    submission = payload.fetch("review_submissions", []).any? do |item|
-      states.include?(item["state"]) && item.fetch("items", []).any? do |review_item|
-        review_item["version"].to_s == version.to_s
+    states = %w[WAITING_FOR_REVIEW IN_REVIEW]
+    return false unless payload.dig("version", "version").to_s == version.to_s
+
+    required = payload.fetch("required_review_resources", [])
+    return false if required.empty?
+
+    payload.fetch("review_submissions", []).any? do |submission|
+      resources = submission.fetch("items", []).map do |item|
+        [item["resource_type"], item["resource_id"]]
       end
+      states.include?(submission["state"]) && (required - resources).empty?
     end
-    version_submitted || submission
   end
 
   def fail_if_terminal!(payload, condition)

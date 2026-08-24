@@ -1,6 +1,10 @@
 import Foundation
 import NovaStationCore
 
+#if DEBUG
+/// Deterministic App Store media support. The whole implementation is
+/// conditionally compiled so none of its launch arguments or scripted game
+/// states exist in the signed Release binary.
 enum MediaScenario: String, CaseIterable, Hashable, Sendable {
     case launch = "launch"
     case mission = "mission"
@@ -50,8 +54,8 @@ struct MediaLaunchConfiguration: Equatable, Sendable {
     let opensPaywall: Bool
 
     init(arguments: [String]) {
-        opensPaywall = arguments.contains("-paywall-screenshot")
         let isUITesting = arguments.contains("-ui-testing")
+        opensPaywall = isUITesting && arguments.contains("-paywall-screenshot")
         guard isUITesting else {
             scenario = nil
             runsPreviewSequence = false
@@ -82,3 +86,4 @@ struct MediaLaunchConfiguration: Equatable, Sendable {
         MediaLaunchConfiguration(arguments: ProcessInfo.processInfo.arguments)
     }
 }
+#endif

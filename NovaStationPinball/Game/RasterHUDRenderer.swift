@@ -107,14 +107,18 @@ struct RasterHUDRenderer {
         }
     }
 
-    private func localizedMission(_ id: MissionID) -> String {
-        String(localized: String.LocalizationValue("mission.\(id.rawValue)"))
+    func localizedMission(_ id: MissionID) -> String {
+        String(localized: String.LocalizationValue(
+            stringLiteral: "mission.\(id.rawValue)"
+        ))
     }
 
-    private func clearanceText(_ clearance: ClearanceLevel) -> String {
+    func clearanceText(_ clearance: ClearanceLevel) -> String {
         String.localizedStringWithFormat(
             String(localized: "hud.clearance"),
-            String(localized: String.LocalizationValue("clearance.\(clearance.rawValue)"))
+            String(localized: String.LocalizationValue(
+                stringLiteral: "clearance.\(clearance.rawValue)"
+            ))
         )
     }
 }

@@ -435,6 +435,14 @@ module PortfolioMarketingSite
       UI_TEXT.fetch(language_key, UI_TEXT.fetch("en"))
     end
 
+    def support_privacy_notice
+      if language_key == "fr"
+        "La catégorie, l’adresse de réponse et le message sont obligatoires ; les versions de l’app et du système sont facultatives. Détails :"
+      else
+        "Category, reply address, and message are required; app and operating-system versions are optional. Details:"
+      end
+    end
+
     def support_field_text
       SUPPORT_FIELD_TEXT.fetch(language_key, SUPPORT_FIELD_TEXT.fetch("en"))
     end
