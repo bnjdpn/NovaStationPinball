@@ -10,7 +10,8 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
   Recovery = NovaStationPinballRejectedSubmissionRecovery
 
   class FakeClient
-    attr_accessor :ambiguous_patch_path, :ambiguous_patch_applies
+    attr_accessor :ambiguous_patch_path, :ambiguous_patch_applies,
+                  :after_mutation
     attr_accessor :workshop_version_type, :workshop_version_value
     attr_reader :mutations, :submission_state, :tips, :app_review_note,
                 :workshop_review_note
@@ -177,6 +178,7 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
       if path == @ambiguous_patch_path
         raise IOError, "simulated response loss after server apply"
       end
+      @after_mutation&.call(self, @mutations.length)
       {}
     end
 
@@ -194,6 +196,7 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
         "territories" => []
       }
       tip["state"] = Recovery::TARGET_TIP_STATE
+      @after_mutation&.call(self, @mutations.length)
       {}
     end
 
@@ -415,6 +418,10 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
       end
 
       mutation_count_before_resume = client.mutations.length
+      complete = Recovery.verify_recovery_complete!(
+        client: client, source_notes: source_notes
+      )
+      assert_equal "read_only", complete.fetch("mode")
       resumed = coordinator(
         client: client, proof_store: store, source_notes: source_notes
       ).apply!
@@ -517,6 +524,30 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
     assert_equal [], client.mutations
   end
 
+  def test_app_review_final_preflight_rejects_a_third_note_without_writing
+    client = FakeClient.new
+    operation = coordinator(client: client).operations.fetch(-2)
+    snapshot = operation.snapshot.merge(
+      "note_bytes" => 20,
+      "note_sha256" => Digest::SHA256.hexdigest("third App Review note")
+    )
+
+    assert_raises(Recovery::Error) { operation.preflight(snapshot) }
+    assert_equal [], client.mutations
+  end
+
+  def test_workshop_final_preflight_rejects_a_third_note_without_writing
+    client = FakeClient.new
+    operation = coordinator(client: client).operations.last
+    snapshot = operation.snapshot.merge(
+      "note_bytes" => 19,
+      "note_sha256" => Digest::SHA256.hexdigest("third Workshop note")
+    )
+
+    assert_raises(Recovery::Error) { operation.preflight(snapshot) }
+    assert_equal [], client.mutations
+  end
+
   def test_malformed_workshop_version_or_type_causes_zero_writes
     [
       ["1junk", "inAppPurchaseVersions"],
@@ -537,6 +568,39 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
         end
         assert_equal [], client.mutations
       end
+    end
+  end
+
+  def test_late_workshop_drift_is_found_before_any_source_mutation
+    Dir.mktmpdir("nova-recovery") do |directory|
+      client = FakeClient.new
+      client.workshop_version_type = "wrongResourceType"
+
+      assert_raises(Recovery::Error) do
+        coordinator(
+          client: client, proof_store: proof_store(directory)
+        ).apply!
+      end
+      assert_equal [], client.mutations
+    end
+  end
+
+  def test_drift_between_transports_blocks_the_next_transport
+    Dir.mktmpdir("nova-recovery") do |directory|
+      client = FakeClient.new
+      client.after_mutation = lambda do |instance, count|
+        instance.workshop_version_type = "wrongResourceType" if count == 1
+      end
+
+      assert_raises(Recovery::Error) do
+        coordinator(
+          client: client, proof_store: proof_store(directory)
+        ).apply!
+      end
+      assert_equal 1, client.mutations.length
+      assert_equal "PATCH", client.mutations.first.fetch(0)
+      assert_equal "/v1/reviewSubmissions/#{Recovery::OLD_SUBMISSION_ID}",
+                   client.mutations.first.fetch(1)
     end
   end
 
@@ -601,12 +665,33 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
   end
 
   def coordinator(client:, proof_store: nil, source_notes: notes, timeout: 1)
+    app_review_allowed_note_identities = [
+      note_identity("outdated App Review note"),
+      note_identity(source_notes.app_review_note)
+    ]
+    workshop_allowed_note_identities = [
+      note_identity("outdated Workshop note"),
+      note_identity(source_notes.workshop_review_note)
+    ]
     Recovery::Coordinator.new(
       client: client, source_notes: source_notes, proof_store: proof_store,
       timeout: timeout, interval: 0,
       monotonic: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
-      sleeper: ->(_seconds) {}
+      sleeper: ->(_seconds) {}, mutation_guard: -> {}, aggregate_guard: -> {},
+      app_review_allowed_note_identities: app_review_allowed_note_identities,
+      workshop_allowed_note_identities: workshop_allowed_note_identities,
+      release_identity: {
+        "candidate_id" => "a" * 64,
+        "source_head" => "b" * 40,
+        "build" => "2",
+        "asc_build_id" => "build-2",
+        "ipa_sha256" => "c" * 64
+      }
     )
+  end
+
+  def note_identity(note)
+    [note.bytesize, Digest::SHA256.hexdigest(note)]
   end
 
   def mutation_count(client, method, path)

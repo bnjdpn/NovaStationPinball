@@ -5,23 +5,20 @@ require "json"
 require "optparse"
 require "time"
 require_relative "client"
+require_relative "rejected_submission_recovery"
+require_relative "release_provenance"
 require_relative "../../fastlane/release_support"
 
 module NovaStationPinballBuildSelection
   module_function
 
-  def selected_build_matches?(client, version_id, build_id)
-    response = client.get(
-      "/v1/appStoreVersions/#{version_id}/build",
-      {
-        "fields[builds]" => "version,processingState,expired"
-      },
-      optional: true
+  def selected_build_matches?(client, version_id, build_id,
+                              contract: NovaStationPinballReleaseProvenance::CURRENT)
+    return false unless build_id == contract.asc_build_id
+
+    NovaStationPinballReleaseProvenance.selected_build_exact?(
+      client: client, version_id: version_id, contract: contract
     )
-    selected = response && response["data"]
-    selected && selected["id"] == build_id &&
-      selected.dig("attributes", "processingState") == "VALID" &&
-      selected.dig("attributes", "expired") != true
   end
 
   def wait_until_selected(client, version_id, build_id, timeout:, interval:)
@@ -38,8 +35,9 @@ end
 
 if $PROGRAM_NAME == __FILE__
   app_root = File.expand_path("../..", __dir__)
+  release_config_path = File.join(app_root, "fastlane", "release_config.json")
   options = {
-    config: File.join(app_root, "fastlane", "release_config.json"),
+    config: release_config_path,
     key_path: ENV["ASC_API_KEY_PATH"],
     timeout: 600,
     interval: 10
@@ -59,9 +57,16 @@ if $PROGRAM_NAME == __FILE__
     bundle_id = options.fetch(:bundle_id)
     version_string = options.fetch(:version)
     build_number = options.fetch(:build).to_s
+    unless File.expand_path(options.fetch(:config)) == release_config_path &&
+           File.file?(release_config_path) && !File.symlink?(release_config_path)
+      raise "Build selection requires the checked-in release configuration"
+    end
     raise "Bundle ID differs from release config" unless bundle_id == config.fetch("bundle_id")
     raise "Version differs from release config" unless version_string == config.fetch("version")
     raise "Build must be a positive integer" unless build_number.match?(/\A[1-9][0-9]*\z/)
+    NovaStationPinballReleaseProvenance.verify_release_arguments!(
+      bundle_id: bundle_id, version: version_string, build: build_number
+    )
     candidate_id = NovaStationPinballReleaseSupport.candidate_id!(
       ENV["APPS_FACTORY_CANDIDATE_ID"]
     )
@@ -72,46 +77,60 @@ if $PROGRAM_NAME == __FILE__
     release_logs = File.join(
       app_root, config.fetch("artifact_root"), run_id, "logs"
     )
+    local_release = NovaStationPinballReleaseProvenance.verify_local!(
+      run_id: run_id, candidate_id: candidate_id
+    )
     client = NovaStationPinballAscClient.new(key_path: options.fetch(:key_path))
-    app = client.get_all("/v1/apps", {
-      "filter[bundleId]" => bundle_id,
-      "fields[apps]" => "bundleId",
-      "limit" => "20"
-    }).fetch("data").find do |item|
-      item.dig("attributes", "bundleId") == bundle_id
-    end
-    raise "App not found for #{bundle_id}" unless app
-    version = client.get_all(
-      "/v1/apps/#{app.fetch('id')}/appStoreVersions",
-      {
-        "filter[platform]" => "IOS",
-        "filter[versionString]" => version_string,
-        "fields[appStoreVersions]" => "versionString,appStoreState,build",
-        "limit" => "20"
-      }
-    ).fetch("data").find do |item|
-      item.dig("attributes", "versionString") == version_string
-    end
-    raise "Version #{version_string} not found" unless version
-    builds = client.get_all("/v1/builds", {
-      "filter[app]" => app.fetch("id"),
-      "filter[preReleaseVersion.version]" => version_string,
-      "filter[preReleaseVersion.platform]" => "IOS",
-      "fields[builds]" => "version,processingState,uploadedDate,expired",
-      "limit" => "200"
-    }).fetch("data").select do |item|
-      item.dig("attributes", "version").to_s == build_number
-    end
-    raise "Build #{build_number} is missing or ambiguous" unless builds.length == 1
-    build = builds.first
-    unless build.dig("attributes", "processingState") == "VALID" &&
-           build.dig("attributes", "expired") != true
-      raise "Build #{build_number} is not a valid non-expired build"
+    build = NovaStationPinballReleaseProvenance.verify_live_build!(client: client)
+    version = NovaStationPinballReleaseProvenance.verify_app_version!(
+      client: client, allowed_states: ["REJECTED"]
+    )
+    release_identity = NovaStationPinballReleaseProvenance.release_identity(
+      local: local_release, build: build
+    )
+    source_notes =
+      NovaStationPinballRejectedSubmissionRecovery::SourceNotes.load!(
+        app_review_path: File.join(
+          app_root, "fastlane", "metadata", "review_information", "notes.txt"
+        ),
+        products_path: File.join(app_root, "fastlane", "pro_products.json")
+      )
+    NovaStationPinballRejectedSubmissionRecovery.verify_recovery_complete!(
+      client: client, source_notes: source_notes
+    )
+    NovaStationPinballReleaseProvenance.verify_review_readiness!(client: client)
+    selection_state = NovaStationPinballReleaseProvenance.selected_build_state!(
+      client: client, version_id: version.fetch("id")
+    )
+    mutation_guard = lambda do
+      local = NovaStationPinballReleaseProvenance.verify_local!(
+        run_id: run_id, candidate_id: candidate_id
+      )
+      NovaStationPinballReleaseProvenance.verify_remote!
+      current_build = NovaStationPinballReleaseProvenance.verify_live_build!(
+        client: client
+      )
+      current_version = NovaStationPinballReleaseProvenance.verify_app_version!(
+        client: client, allowed_states: ["REJECTED"]
+      )
+      current = NovaStationPinballReleaseProvenance.release_identity(
+        local: local, build: current_build
+      )
+      unless current == release_identity && current_version.fetch("id") == version.fetch("id")
+        raise "Release provenance drifted before build selection transport"
+      end
+      NovaStationPinballRejectedSubmissionRecovery.verify_recovery_complete!(
+        client: client, source_notes: source_notes
+      )
+      NovaStationPinballReleaseProvenance.verify_review_readiness!(client: client)
+      unless NovaStationPinballReleaseProvenance.selected_build_state!(
+        client: client, version_id: current_version.fetch("id")
+      ) == :source
+        raise "Build selection source changed before transport"
+      end
     end
 
-    if NovaStationPinballBuildSelection.selected_build_matches?(
-      client, version.fetch("id"), build.fetch("id")
-    )
+    if selection_state == :target
       puts "Build #{build_number} is already selected"
       exit 0
     end
@@ -122,10 +141,22 @@ if $PROGRAM_NAME == __FILE__
       kind: "select_build",
       candidate_id: candidate_id,
       version: version_string,
-      payload: { "build" => build_number, "build_id" => build.fetch("id") }
+      payload: {
+        "run_id" => run_id,
+        "source_head" => release_identity.fetch("source_head"),
+        "app_version_id" => version.fetch("id"),
+        "build" => build_number,
+        "build_id" => build.fetch("id"),
+        "uploaded_date" => release_identity.fetch("uploaded_date"),
+        "ipa_sha256" => release_identity.fetch("ipa_sha256")
+      }
     }
     begin
-      NovaStationPinballReleaseSupport.transport_once!(**proof) do
+      existing_intent = File.exist?(proof.fetch(:intent_path)) ||
+        File.symlink?(proof.fetch(:intent_path))
+      NovaStationPinballReleaseSupport.transport_once!(
+        **proof, preflight: existing_intent ? nil : mutation_guard
+      ) do
         client.patch(
           "/v1/appStoreVersions/#{version.fetch('id')}/relationships/build",
           { data: { type: "builds", id: build.fetch("id") } }
@@ -141,6 +172,8 @@ if $PROGRAM_NAME == __FILE__
     NovaStationPinballReleaseSupport.mark_observed!(**proof)
     puts "Selected build #{build_number} for #{bundle_id} #{version_string}"
   rescue ArgumentError, KeyError, JSON::ParserError, RuntimeError,
+         NovaStationPinballReleaseProvenance::Error,
+         NovaStationPinballReleaseSupport::PretransportFailure,
          NovaStationPinballAscError => error
     warn "select_build: #{error.message}"
     exit 1

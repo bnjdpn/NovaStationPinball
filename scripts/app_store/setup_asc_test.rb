@@ -479,13 +479,25 @@ class NovaStationPinballAscSetupTest < Minitest::Test
     )
   end
 
+  def test_apply_never_fabricates_a_candidate_from_configuration_bytes
+    source = File.binread(
+      File.join(File.expand_path("../..", __dir__), "scripts/app_store/setup_asc.rb")
+    )
+    refute_includes source, "Digest::SHA256.hexdigest(config_bytes)"
+    assert_includes source,
+                    "NovaStationPinballReleaseSupport.candidate_id!("
+    assert_includes source,
+                    "NovaStationPinballReleaseProvenance.verify_local!("
+  end
+
   def test_apply_provisions_v2_leaderboard_and_localizations_then_reads_back_exactly
     client = ProvisionClient.new
 
     Dir.mktmpdir do |proof_root|
       result = NovaStationPinballAscSetup.provision!(
         client: client, config: CONFIG, proof_root: proof_root,
-        candidate_id: "a" * 64
+        candidate_id: "a" * 64, mutation_guard: -> {},
+        release_identity: release_identity
       )
 
       assert_equal "apply_mode_with_durable_proofs", result.fetch("mutations")
@@ -510,8 +522,33 @@ class NovaStationPinballAscSetupTest < Minitest::Test
                       "/v2/gameCenterLeaderboardVersions"
       assert_equal 3, Dir.glob(File.join(proof_root, "*-intent.json")).length
       assert_equal 3, Dir.glob(File.join(proof_root, "*-receipt.json")).length
+      Dir.glob(File.join(proof_root, "*-intent.json")).each do |path|
+        document = JSON.parse(File.binread(path))
+        assert_equal release_identity, document.dig("payload", "release")
+      end
       assert_empty client.patches
     end
+  end
+
+  def test_resource_appearance_during_mutation_preflight_blocks_the_post
+    client = ProvisionClient.new
+    injected = false
+    guard = lambda do
+      next if injected
+
+      injected = true
+      client.send(:seed_existing!, nil)
+    end
+    Dir.mktmpdir do |proof_root|
+      assert_raises(NovaStationPinballReleaseSupport::PretransportFailure) do
+        NovaStationPinballAscSetup.provision!(
+          client: client, config: CONFIG, proof_root: proof_root,
+          candidate_id: "a" * 64, mutation_guard: guard,
+          release_identity: release_identity
+        )
+      end
+    end
+    assert_empty client.posts
   end
 
   def test_existing_intent_without_receipt_forces_get_only_and_never_posts
@@ -523,6 +560,8 @@ class NovaStationPinballAscSetupTest < Minitest::Test
         key: "leaderboard-#{definition.fetch('id')}",
         candidate_id: "a" * 64,
         version: CONFIG.fetch("version"),
+        mutation_guard: -> {},
+        release_identity: release_identity,
         payload: {
           "action" => "create_game_center_leaderboard_with_inline_version",
           "detail_id" => "detail-1",
@@ -531,13 +570,18 @@ class NovaStationPinballAscSetupTest < Minitest::Test
             .leaderboard_attributes(definition).transform_keys(&:to_s)
         }
       )
-      NovaStationPinballReleaseSupport.transport_once!(**identity) {}
+      NovaStationPinballReleaseSupport.transport_once!(
+        **identity.merge(preflight: nil)
+      ) {}
       tick = -1
 
       assert_raises(NovaStationPinballAscSetup::SetupError) do
         NovaStationPinballAscSetup.provision!(
           client: client, config: CONFIG, proof_root: proof_root,
-          candidate_id: "a" * 64, timeout: 1, interval: 0.1,
+          candidate_id: "a" * 64,
+          mutation_guard: -> { raise "must stay GET-only" },
+          release_identity: release_identity,
+          timeout: 1, interval: 0.1,
           monotonic: -> { tick += 1 }, sleeper: ->(_seconds) {}
         )
       end
@@ -552,7 +596,9 @@ class NovaStationPinballAscSetupTest < Minitest::Test
     Dir.mktmpdir do |proof_root|
       NovaStationPinballAscSetup.provision!(
         client: client, config: CONFIG, proof_root: proof_root,
-        candidate_id: "a" * 64, timeout: 5, interval: 0.01,
+        candidate_id: "a" * 64, mutation_guard: -> {},
+        release_identity: release_identity,
+        timeout: 5, interval: 0.01,
         sleeper: ->(_seconds) {}
       )
     end
@@ -572,7 +618,8 @@ class NovaStationPinballAscSetupTest < Minitest::Test
         assert_raises(NovaStationPinballAscSetup::SetupError) do
           NovaStationPinballAscSetup.provision!(
             client: client, config: CONFIG, proof_root: proof_root,
-            candidate_id: "a" * 64
+            candidate_id: "a" * 64, mutation_guard: -> {},
+            release_identity: release_identity
           )
         end
       end
@@ -582,6 +629,16 @@ class NovaStationPinballAscSetupTest < Minitest::Test
   end
 
   private
+
+  def release_identity
+    {
+      "candidate_id" => "a" * 64,
+      "run_id" => "test-run", "source_head" => "b" * 40,
+      "version" => "1.0", "build" => "2", "asc_build_id" => "build-2",
+      "uploaded_date" => "2026-08-24T00:29:40-07:00",
+      "ipa_sha256" => "c" * 64
+    }
+  end
 
   def exact_app
     {

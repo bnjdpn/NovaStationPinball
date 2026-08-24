@@ -20,6 +20,7 @@ class NovaStationPinballAscStatusTest < Minitest::Test
             "id" => "submission-1",
             "attributes" => {
               "state" => "WAITING_FOR_REVIEW",
+              "platform" => "IOS",
               "submittedDate" => "2026-08-23T00:00:00Z"
             }
           }]
@@ -105,12 +106,17 @@ class NovaStationPinballAscStatusTest < Minitest::Test
       "required_review_resources" => required,
       "review_submissions" => [{
         "state" => "WAITING_FOR_REVIEW",
+        "platform" => "IOS",
         "items" => required.map do |type, id|
           { "resource_type" => type, "resource_id" => id }
         end
       }]
     }
     assert NovaStationPinballAscStatus.submitted?(payload, "1.0")
+
+    payload.fetch("review_submissions").first["platform"] = "MAC_OS"
+    refute NovaStationPinballAscStatus.submitted?(payload, "1.0")
+    payload.fetch("review_submissions").first["platform"] = "IOS"
 
     payload.fetch("review_submissions").first.fetch("items").delete_at(1)
     refute NovaStationPinballAscStatus.submitted?(payload, "1.0")
@@ -128,7 +134,7 @@ class NovaStationPinballAscStatusTest < Minitest::Test
       { "resource_type" => type, "resource_id" => id }
     end
     payload.fetch("review_submissions") << {
-      "state" => "READY_FOR_REVIEW", "items" => []
+      "state" => "READY_FOR_REVIEW", "platform" => "IOS", "items" => []
     }
     refute NovaStationPinballAscStatus.submitted?(payload, "1.0")
   end

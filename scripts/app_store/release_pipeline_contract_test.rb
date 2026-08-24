@@ -236,6 +236,15 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
 
   end
 
+  def test_review_mutator_reads_the_target_build_exactly_once
+    source = File.binread(
+      File.join(ROOT, "scripts/app_store/review_submission.rb")
+    )
+    assert_equal 1, source.scan(
+      "target = NovaStationPinballReleaseSupport.read_target_build!("
+    ).length
+  end
+
   def test_status_select_and_submission_helpers_are_fail_closed
     helpers = %w[
       client.rb metadata_readback.rb status.rb wait_for_state.rb select_build.rb
@@ -364,7 +373,10 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
             {
               "id" => submission.fetch("id"),
               "type" => "reviewSubmissions",
-              "attributes" => { "state" => submission.fetch("state") }
+              "attributes" => {
+                "state" => submission.fetch("state"),
+                "platform" => submission.fetch("platform")
+              }
             }
           end
         }
@@ -415,12 +427,18 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     StubClient.new(
       purchases: [
         purchase(
-          id: "iap-1", product_id: "com.bnjdpn.NovaStationPinball.workshop",
+          id: NovaStationPinballReleaseProvenance::CURRENT.workshop_iap_id,
+          product_id: "com.bnjdpn.NovaStationPinball.workshop",
           type: type, state: state
         )
       ],
       versions: {
-        "iap-1" => [purchase_version(id: "iapv-1", version: "1", state: version_state)]
+        NovaStationPinballReleaseProvenance::CURRENT.workshop_iap_id => [
+          purchase_version(
+            id: NovaStationPinballReleaseProvenance::CURRENT.workshop_version_id,
+            version: "1", state: version_state
+          )
+        ]
       }
     )
   end
@@ -450,7 +468,8 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     )
     assert_equal 1, records.length
     record = records.fetch(0)
-    assert_equal "iapv-1", record.fetch("version_id")
+    assert_equal NovaStationPinballReleaseProvenance::CURRENT.workshop_version_id,
+                 record.fetch("version_id")
     assert record.fetch("must_bundle"),
            "a product App Store Connect has never approved must ride with the version"
     assert record.fetch("required")
@@ -461,7 +480,10 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_equal [
       ["appStoreVersions", "v-1"],
       ["gameCenterLeaderboardVersions", "gcv-1"],
-      ["inAppPurchaseVersions", "iapv-1"]
+      [
+        "inAppPurchaseVersions",
+        NovaStationPinballReleaseProvenance::CURRENT.workshop_version_id
+      ]
     ], required
   end
 
@@ -588,6 +610,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     ]
     exact = {
       "id" => "review-1", "state" => "WAITING_FOR_REVIEW",
+      "platform" => "IOS",
       "resources" => required.reverse
     }
     assert NovaStationPinballReviewSubmission.review_submitted?(
@@ -609,6 +632,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
       NovaStationPinballReviewSubmission.resumable_draft!(
         [{
           "id" => "draft-extra", "state" => "READY_FOR_REVIEW",
+          "platform" => "IOS",
           "resources" => superset.fetch("resources")
         }],
         required
@@ -642,6 +666,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     ]
     draft = {
       "id" => "draft-1", "state" => "READY_FOR_REVIEW",
+      "platform" => "IOS",
       "resources" => [["appStoreVersions", "v-1"]]
     }
     assert_equal draft,
@@ -653,6 +678,63 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
         [draft, draft.merge("id" => "draft-2")], required
       )
     end
+
+    mac_draft = draft.merge("id" => "mac-draft", "platform" => "MAC_OS")
+    assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.resumable_draft!(
+        [mac_draft], required
+      )
+    end
+    assert NovaStationPinballReviewSubmission.require_missing_resource!(
+      draft, ["inAppPurchaseVersions", "new-iap"]
+    )
+    assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.require_missing_resource!(
+        draft, ["appStoreVersions", "v-1"]
+      )
+    end
+  end
+
+  def test_submission_rejects_a_non_ios_draft_and_an_unfrozen_workshop_version
+    required = [["appStoreVersions", "v-1"]]
+    mac_submission = {
+      "id" => "mac-review", "state" => "WAITING_FOR_REVIEW",
+      "platform" => "MAC_OS", "resources" => required
+    }
+    refute NovaStationPinballReviewSubmission.review_submitted?(
+      SubmissionClient.new([mac_submission]), "app-1", required
+    )
+
+    contract = NovaStationPinballReleaseProvenance::CURRENT
+    purchase = purchase(
+      id: contract.workshop_iap_id,
+      product_id: contract.workshop_product_id,
+      type: "NON_CONSUMABLE", state: "READY_TO_SUBMIT"
+    )
+    client = StubClient.new(
+      purchases: [purchase],
+      versions: {
+        contract.workshop_iap_id => [
+          purchase_version(
+            id: contract.workshop_version_id,
+            version: "1", state: "PREPARE_FOR_SUBMISSION"
+          ),
+          purchase_version(
+            id: "unexpected-version-2",
+            version: "2", state: "PREPARE_FOR_SUBMISSION"
+          )
+        ]
+      }
+    )
+    error = assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.product_submission_records(
+        client, "app-1", [{
+          "product_id" => contract.workshop_product_id,
+          "type" => "NON_CONSUMABLE"
+        }]
+      )
+    end
+    assert_includes error.message, "frozen Workshop release"
   end
 
   def test_the_submission_path_reports_a_type_mismatch_against_the_configuration

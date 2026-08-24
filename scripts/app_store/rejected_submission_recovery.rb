@@ -6,6 +6,7 @@ require "fileutils"
 require "json"
 require "optparse"
 require_relative "client"
+require_relative "release_provenance"
 
 module NovaStationPinballRejectedSubmissionRecovery
   APP_ID = "6799920176"
@@ -22,6 +23,14 @@ module NovaStationPinballRejectedSubmissionRecovery
   WORKSHOP_REVIEW_NOTE_BYTES = 1_312
   WORKSHOP_REVIEW_NOTE_SHA256 =
     "58b87d2d341a7061446c5c07d4507d7100605b78e4bbb4a6877ae90aac474db3"
+  APP_REVIEW_ALLOWED_NOTE_IDENTITIES = [
+    NovaStationPinballReleaseProvenance::APP_REVIEW_SOURCE_NOTE,
+    NovaStationPinballReleaseProvenance::APP_REVIEW_TARGET_NOTE
+  ].freeze
+  WORKSHOP_ALLOWED_NOTE_IDENTITIES = [
+    NovaStationPinballReleaseProvenance::WORKSHOP_SOURCE_NOTE,
+    NovaStationPinballReleaseProvenance::WORKSHOP_TARGET_NOTE
+  ].freeze
 
   OLD_SUBMISSION_RESOURCES = [
     ["appStoreVersions", APP_VERSION_ID],
@@ -444,7 +453,13 @@ module NovaStationPinballRejectedSubmissionRecovery
     attr_reader :operations
 
     def initialize(client:, source_notes:, proof_store: nil, timeout: 300,
-                   interval: 5, monotonic: nil, sleeper: nil)
+                   interval: 5, monotonic: nil, sleeper: nil,
+                   mutation_guard: nil, aggregate_guard: nil,
+                   release_identity: nil,
+                   app_review_allowed_note_identities:
+                     APP_REVIEW_ALLOWED_NOTE_IDENTITIES,
+                   workshop_allowed_note_identities:
+                     WORKSHOP_ALLOWED_NOTE_IDENTITIES)
       @client = client
       @source_notes = source_notes
       @proof_store = proof_store
@@ -458,6 +473,11 @@ module NovaStationPinballRejectedSubmissionRecovery
       }
       @sleeper = sleeper || Kernel.method(:sleep)
       @transport_warnings = []
+      @mutation_guard = mutation_guard
+      @aggregate_guard = aggregate_guard
+      @release_identity = release_identity
+      @app_review_allowed_note_identities = app_review_allowed_note_identities
+      @workshop_allowed_note_identities = workshop_allowed_note_identities
       @operations = build_operations.freeze
     end
 
@@ -476,8 +496,14 @@ module NovaStationPinballRejectedSubmissionRecovery
 
     def apply!
       raise Error, "A durable proof store is required for --apply" unless @proof_store
+      unless @mutation_guard.respond_to?(:call) &&
+             @aggregate_guard.respond_to?(:call) &&
+             @release_identity.instance_of?(Hash) && !@release_identity.empty?
+        raise Error, "An exact release provenance guard is required for --apply"
+      end
 
       @transport_warnings = []
+      preflight_all!
       results = @operations.map { |operation| execute!(operation) }
       {
         "schema_version" => 1,
@@ -493,6 +519,40 @@ module NovaStationPinballRejectedSubmissionRecovery
     end
 
     private
+
+    # Validate every later resource before the first transport so a late drift
+    # cannot leave an otherwise avoidable partial recovery behind.
+    def preflight_all!
+      @aggregate_guard.call
+      @operations.each do |operation|
+        snapshot = operation.snapshot
+        identity = operation.identity(snapshot)
+        phase = @proof_store.phase(operation: operation.key, identity: identity)
+        case phase
+        when :observed
+          operation.observe(snapshot)
+          ensure_exact!(operation, snapshot)
+        when :get_only
+          observed = wait_for_exact!(operation)
+          @proof_store.record_observed!(
+            operation: operation.key, identity: identity, observed: observed
+          )
+        when :missing
+          if snapshot["exact"]
+            operation.observe(snapshot)
+            ensure_exact!(operation, snapshot)
+          else
+            disposition = operation.preflight(snapshot)
+            unless %i[get_only mutate].include?(disposition)
+              raise Error, "Invalid recovery preflight disposition for #{operation.key}"
+            end
+          end
+        else
+          raise Error, "Invalid recovery proof phase for #{operation.key}"
+        end
+      end
+      true
+    end
 
     def execute!(operation)
       first = operation.snapshot
@@ -526,6 +586,26 @@ module NovaStationPinballRejectedSubmissionRecovery
         raise Error, "Invalid recovery preflight disposition for #{operation.key}"
       end
 
+      @mutation_guard.call
+      preflight_all!
+      current = operation.snapshot
+      current_identity = operation.identity(current)
+      unless current_identity == identity
+        raise Error, "Recovery identity drifted before #{operation.key} transport"
+      end
+      if current["exact"]
+        operation.observe(current)
+        ensure_exact!(operation, current)
+        return operation_result(operation, current, "not_needed", :missing)
+      end
+      current_disposition = operation.preflight(current)
+      if current_disposition == :get_only
+        observed = wait_for_exact!(operation)
+        return operation_result(operation, observed, "get_only", :missing)
+      end
+      unless current_disposition == :mutate
+        raise Error, "Invalid final recovery preflight for #{operation.key}"
+      end
       claim = @proof_store.claim!(
         operation: operation.key, identity: identity
       )
@@ -544,7 +624,7 @@ module NovaStationPinballRejectedSubmissionRecovery
 
       transport = "attempted"
       begin
-        operation.mutate(first)
+        operation.mutate(current)
       rescue StandardError => error
         transport = "ambiguous"
         @transport_warnings << {
@@ -725,6 +805,7 @@ module NovaStationPinballRejectedSubmissionRecovery
     def request_identity(action:, method:, path:, body:, target:)
       {
         "action" => action,
+        "release" => @release_identity,
         "request" => {
           "method" => method,
           "path" => path,
@@ -934,6 +1015,9 @@ module NovaStationPinballRejectedSubmissionRecovery
 
     def app_review_note_preflight(snapshot)
       app_review_note_observer(snapshot)
+      require_audited_note!(
+        snapshot, @app_review_allowed_note_identities, "App Review"
+      )
       :mutate
     end
 
@@ -1010,6 +1094,9 @@ module NovaStationPinballRejectedSubmissionRecovery
 
     def workshop_note_preflight(snapshot)
       workshop_note_observer(snapshot)
+      require_audited_note!(
+        snapshot, @workshop_allowed_note_identities, "Workshop"
+      )
       :mutate
     end
 
@@ -1030,6 +1117,15 @@ module NovaStationPinballRejectedSubmissionRecovery
       value == 1 || value == "1"
     end
 
+    def require_audited_note!(snapshot, allowed_identities, label)
+      identity = [
+        snapshot.fetch("note_bytes"), snapshot.fetch("note_sha256")
+      ]
+      return snapshot if allowed_identities.include?(identity)
+
+      raise Error, "#{label} note differs from the audited source and target"
+    end
+
     def fetch_data!(payload, type:, id:, label:)
       data = payload && payload["data"]
       unless data.instance_of?(Hash) && data["type"] == type &&
@@ -1038,6 +1134,33 @@ module NovaStationPinballRejectedSubmissionRecovery
       end
       data
     end
+  end
+
+  def self.verify_recovery_complete!(client:, source_notes:,
+                                     allowed_active_submission_ids: [])
+    allowed = allowed_active_submission_ids.map(&:to_s).sort
+    unless allowed.uniq.length == allowed.length
+      raise Error, "Allowed active review submissions contain a duplicate"
+    end
+    status = Coordinator.new(client: client, source_notes: source_notes).status
+    operations = status.fetch("operations")
+    cancel = operations.find do |operation|
+      operation.fetch("operation") == "cancel-old-submission"
+    end
+    unless cancel && cancel.fetch("submission_id") == OLD_SUBMISSION_ID &&
+           cancel.fetch("state") == CANCEL_TERMINAL_STATE &&
+           cancel.fetch("platform") == "IOS" &&
+           cancel.fetch("resources") == OLD_SUBMISSION_RESOURCES &&
+           cancel.fetch("active_submission_ids") == allowed
+      raise Error, "Rejected submission recovery is not terminal and exact"
+    end
+    remaining = operations.reject do |operation|
+      operation.fetch("operation") == "cancel-old-submission"
+    end
+    unless remaining.length == 5 && remaining.all? { |operation| operation["exact"] == true }
+      raise Error, "Rejected submission resources are not all at their exact targets"
+    end
+    status
   end
 
   module CLI
@@ -1078,9 +1201,54 @@ module NovaStationPinballRejectedSubmissionRecovery
         app_review_path: options.fetch(:app_review_note),
         products_path: options.fetch(:products)
       )
+      local_release = nil
+      if options[:apply]
+        local_release = NovaStationPinballReleaseProvenance.verify_local!(
+          run_id: options.fetch(:run_id),
+          candidate_id: ENV["APPS_FACTORY_CANDIDATE_ID"]
+        )
+      end
       client = NovaStationPinballAscClient.new(
         key_path: options.fetch(:key_path)
       )
+      release_identity = nil
+      mutation_guard = nil
+      aggregate_guard = nil
+      if options[:apply]
+        live_build = NovaStationPinballReleaseProvenance.verify_live_build!(
+          client: client
+        )
+        NovaStationPinballReleaseProvenance.verify_app_version!(
+          client: client, allowed_states: ["REJECTED"]
+        )
+        release_identity = NovaStationPinballReleaseProvenance.release_identity(
+          local: local_release, build: live_build
+        )
+        mutation_guard = lambda do
+          local = NovaStationPinballReleaseProvenance.verify_local!(
+            run_id: options.fetch(:run_id),
+            candidate_id: ENV["APPS_FACTORY_CANDIDATE_ID"]
+          )
+          NovaStationPinballReleaseProvenance.verify_remote!
+          build = NovaStationPinballReleaseProvenance.verify_live_build!(
+            client: client
+          )
+          NovaStationPinballReleaseProvenance.verify_app_version!(
+            client: client, allowed_states: ["REJECTED"]
+          )
+          current = NovaStationPinballReleaseProvenance.release_identity(
+            local: local, build: build
+          )
+          unless current == release_identity
+            raise Error, "Release provenance drifted before recovery transport"
+          end
+        end
+        aggregate_guard = lambda do
+          NovaStationPinballReleaseProvenance.verify_review_readiness!(
+            client: client, allow_source_notes: true
+          )
+        end
+      end
       proof_store = nil
       if options[:apply]
         artifact_root = File.expand_path(config.fetch("artifact_root"), app_root)
@@ -1093,7 +1261,9 @@ module NovaStationPinballRejectedSubmissionRecovery
       end
       coordinator = Coordinator.new(
         client: client, source_notes: source_notes, proof_store: proof_store,
-        timeout: options.fetch(:timeout), interval: options.fetch(:interval)
+        timeout: options.fetch(:timeout), interval: options.fetch(:interval),
+        mutation_guard: mutation_guard, aggregate_guard: aggregate_guard,
+        release_identity: release_identity
       )
       result = options[:apply] ? coordinator.apply! : coordinator.status
       stdout.puts(JSON.pretty_generate(result))

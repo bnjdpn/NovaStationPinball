@@ -136,6 +136,7 @@ module NovaStationPinballAscStatus
       {
         "id" => submission.fetch("id"),
         "state" => submission.dig("attributes", "state"),
+        "platform" => submission.dig("attributes", "platform"),
         "submitted" => submission.dig("attributes", "submittedDate"),
         "items" => items.fetch("data").map do |item|
           resource_type, resource_id =
@@ -391,6 +392,7 @@ module NovaStationPinballAscStatus
       [item["resource_type"], item["resource_id"]]
     end
     SUBMITTED_STATES.include?(submission["state"]) &&
+      submission["platform"] == "IOS" &&
       NovaStationPinballReviewSubmission.exact_resource_set?(
         resources, required
       )
@@ -438,6 +440,7 @@ module NovaStationPinballAscStatus
       "version" => version && {
         "id" => version.fetch("id"),
         "version" => version.dig("attributes", "versionString"),
+        "platform" => version.dig("attributes", "platform"),
         "state" => version.dig("attributes", "appStoreState"),
         "created" => version.dig("attributes", "createdDate")
       },

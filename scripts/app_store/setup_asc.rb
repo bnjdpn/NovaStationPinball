@@ -1,10 +1,10 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "digest"
 require "json"
 require "optparse"
 require_relative "game_center_contract"
+require_relative "release_provenance"
 require_relative "../../fastlane/release_support"
 
 module NovaStationPinballAscSetup
@@ -226,7 +226,8 @@ module NovaStationPinballAscSetup
     end
   end
 
-  def proof_identity(proof_root:, key:, candidate_id:, version:, payload:)
+  def proof_identity(proof_root:, key:, candidate_id:, version:, payload:,
+                     mutation_guard:, release_identity:)
     unless key.to_s.match?(/\A[0-9A-Za-z][0-9A-Za-z._-]{2,127}\z/)
       raise SetupError, "Invalid ASC setup mutation key"
     end
@@ -236,7 +237,8 @@ module NovaStationPinballAscSetup
       kind: "setup_asc",
       candidate_id: candidate_id,
       version: version,
-      payload: payload
+      payload: payload.merge("release" => release_identity),
+      preflight: mutation_guard
     }
   end
 
@@ -251,15 +253,24 @@ module NovaStationPinballAscSetup
     NovaStationPinballReleaseSupport.run_id!(raw_run_id)
   end
 
-  def create_once_and_observe!(proof, confirmation)
+  def create_once_and_observe!(proof, confirmation, source_preflight:)
+    transport_proof = proof.reject { |key, _value| key == :preflight }
+    preflight = lambda do
+      proof.fetch(:preflight).call
+      source_preflight.call
+    end
+    existing_intent = File.exist?(transport_proof.fetch(:intent_path)) ||
+      File.symlink?(transport_proof.fetch(:intent_path))
     begin
-      NovaStationPinballReleaseSupport.transport_once!(**proof) { yield }
+      NovaStationPinballReleaseSupport.transport_once!(
+        **transport_proof, preflight: existing_intent ? nil : preflight
+      ) { yield }
     rescue NovaStationPinballReleaseSupport::AmbiguousTransport
       # The exclusive intent already exists. Recovery is GET-only from here;
       # never retry a transport whose response may merely have been lost.
     end
     observed = confirmation.call
-    NovaStationPinballReleaseSupport.mark_observed!(**proof)
+    NovaStationPinballReleaseSupport.mark_observed!(**transport_proof)
     observed
   end
 
@@ -280,6 +291,11 @@ module NovaStationPinballAscSetup
           timeout: timeout, interval: interval,
           monotonic: monotonic, sleeper: sleeper
         ) { game_center_detail(client, app_id) }
+      end,
+      source_preflight: lambda do
+        unless game_center_detail(client, app_id).nil?
+          raise SetupError, "Game Center detail appeared before create transport"
+        end
       end
     ) do
       client.post("/v1/gameCenterDetails", {
@@ -448,6 +464,16 @@ module NovaStationPinballAscSetup
             locale, localization, timeout: timeout, interval: interval,
             monotonic: monotonic, sleeper: sleeper
           )
+        end,
+        source_preflight: lambda do
+          current = versions_for_leaderboard(client, leaderboard.fetch("id"))
+          current_version = current.fetch("data").find do |item|
+            item.fetch("id") == version.fetch("id")
+          end
+          unless current_version &&
+                 localization_index!(current_version, current, definition)[locale].nil?
+            raise SetupError, "Game Center localization appeared before create transport"
+          end
         end
       ) do
         client.post("/v2/gameCenterLeaderboardLocalizations", {
@@ -524,6 +550,12 @@ module NovaStationPinballAscSetup
               timeout: timeout, interval: interval,
               monotonic: monotonic, sleeper: sleeper
             )
+          end,
+          source_preflight: lambda do
+            current = leaderboard_catalogue(client, detail.fetch("id"))
+            unless current.empty?
+              raise SetupError, "Game Center leaderboard appeared before create transport"
+            end
           end
         ) do
           client.post(
@@ -553,7 +585,8 @@ module NovaStationPinballAscSetup
     )
   end
 
-  def provision!(client:, config:, proof_root:, candidate_id:,
+  def provision!(client:, config:, proof_root:, candidate_id:, mutation_guard:,
+                 release_identity:,
                  timeout: 60, interval: 1,
                  monotonic: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
                  sleeper: Kernel.method(:sleep))
@@ -561,7 +594,9 @@ module NovaStationPinballAscSetup
     proof_context = {
       proof_root: proof_root,
       candidate_id: candidate_id,
-      version: config.fetch("version")
+      version: config.fetch("version"),
+      mutation_guard: mutation_guard,
+      release_identity: release_identity
     }
     provision_game_center!(
       client: client, app_id: app.fetch("id"), config: config,
@@ -582,8 +617,9 @@ module NovaStationPinballAscSetup
     def run(argv)
       require_relative "client"
       app_root = File.expand_path("../..", __dir__)
+      release_config_path = File.join(app_root, "fastlane", "release_config.json")
       options = {
-        config: File.join(app_root, "fastlane", "release_config.json"),
+        config: release_config_path,
         key_path: ENV["ASC_API_KEY_PATH"],
         expectation: :ready,
         timeout: 60.0,
@@ -607,13 +643,54 @@ module NovaStationPinballAscSetup
       if options.fetch(:timeout) <= 0 || options.fetch(:interval) <= 0
         raise SetupError, "--timeout and --interval must be positive"
       end
-      client = NovaStationPinballAscClient.new(
-        key_path: options.fetch(:key_path)
-      )
+      run_id = nil
+      candidate_id = nil
+      local_release = nil
+      if options[:apply]
+        unless File.expand_path(options.fetch(:config)) == release_config_path &&
+               File.file?(release_config_path) && !File.symlink?(release_config_path)
+          raise SetupError, "--apply requires the checked-in release configuration"
+        end
+        run_id = NovaStationPinballAscSetup.apply_run_id!(
+          options[:run_id], ENV
+        )
+        candidate_id = NovaStationPinballReleaseSupport.candidate_id!(
+          ENV["APPS_FACTORY_CANDIDATE_ID"]
+        )
+        local_release = NovaStationPinballReleaseProvenance.verify_local!(
+          run_id: run_id, candidate_id: candidate_id
+        )
+      end
+      client = NovaStationPinballAscClient.new(key_path: options.fetch(:key_path))
       result = if options[:apply]
-                 run_id = NovaStationPinballAscSetup.apply_run_id!(
-                   options[:run_id], ENV
+                 live_build = NovaStationPinballReleaseProvenance.verify_live_build!(
+                   client: client
                  )
+                 NovaStationPinballReleaseProvenance.verify_app_version!(
+                   client: client, allowed_states: ["REJECTED"]
+                 )
+                 release_identity =
+                   NovaStationPinballReleaseProvenance.release_identity(
+                     local: local_release, build: live_build
+                   )
+                 mutation_guard = lambda do
+                   local = NovaStationPinballReleaseProvenance.verify_local!(
+                     run_id: run_id, candidate_id: candidate_id
+                   )
+                   NovaStationPinballReleaseProvenance.verify_remote!
+                   build = NovaStationPinballReleaseProvenance.verify_live_build!(
+                     client: client
+                   )
+                   NovaStationPinballReleaseProvenance.verify_app_version!(
+                     client: client, allowed_states: ["REJECTED"]
+                   )
+                   current = NovaStationPinballReleaseProvenance.release_identity(
+                     local: local, build: build
+                   )
+                   unless current == release_identity
+                     raise SetupError, "Release provenance drifted before ASC setup transport"
+                   end
+                 end
                  artifact_root = File.expand_path(
                    config.fetch("artifact_root"), app_root
                  )
@@ -623,12 +700,11 @@ module NovaStationPinballAscSetup
                  proof_root = File.join(
                    artifact_root, run_id, "logs", "setup-asc"
                  )
-                 candidate_id = ENV["APPS_FACTORY_CANDIDATE_ID"].to_s
-                 candidate_id = Digest::SHA256.hexdigest(config_bytes) if
-                   candidate_id.empty?
                  NovaStationPinballAscSetup.provision!(
                    client: client, config: config,
                    proof_root: proof_root, candidate_id: candidate_id,
+                   mutation_guard: mutation_guard,
+                   release_identity: release_identity,
                    timeout: options.fetch(:timeout),
                    interval: options.fetch(:interval)
                  )
@@ -645,6 +721,8 @@ module NovaStationPinballAscSetup
     rescue ArgumentError, KeyError, JSON::ParserError, OptionParser::ParseError,
            NovaStationPinballAscSetup::SetupError,
            NovaStationPinballGameCenterContract::Error,
+           NovaStationPinballReleaseProvenance::Error,
+           NovaStationPinballReleaseSupport::PretransportFailure,
            NovaStationPinballAscError => error
       warn "setup_asc: #{error.message}"
       1
