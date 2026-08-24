@@ -312,13 +312,20 @@ module NovaStationPinballAscSetup
       NovaStationPinballReleaseSupport.transport_once!(
         **transport_proof, preflight: existing_intent ? nil : preflight
       ) { yield }
-    rescue NovaStationPinballReleaseSupport::AmbiguousTransport
+    rescue NovaStationPinballReleaseSupport::AmbiguousTransport => wrapped
+      original = wrapped.cause
+      raise original if deterministic_asc_rejection?(original)
+
       # The exclusive intent already exists. Recovery is GET-only from here;
       # never retry a transport whose response may merely have been lost.
     end
     observed = confirmation.call
     NovaStationPinballReleaseSupport.mark_observed!(**transport_proof)
     observed
+  end
+
+  def deterministic_asc_rejection?(error)
+    error.respond_to?(:status) && error.status.to_s.match?(/\A4\d\d\z/)
   end
 
   def ensure_game_center_detail!(client, app_id, proof_context,

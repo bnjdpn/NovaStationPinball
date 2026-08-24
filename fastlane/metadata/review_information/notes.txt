@@ -4,7 +4,9 @@ Nova Station Pinball has no prior READY_FOR_SALE version. Its first submission c
 Nova Station Pinball is an original single-player pinball game, landscape only, playable offline. Play with the on-screen flippers and the pull-and-release plunger; the interactive table guide is available from the home screen. No account and no demo credentials are required. Game Center is optional and used only for leaderboards; declining Game Center authentication does not block play or local scores.
 
 WHAT THIS BUILD SELLS
-Build 2 replaces the rejected build 1 of the first App Store version 1.0. It introduces one new feature-unlocking IAP, com.bnjdpn.NovaStationPinball.workshop ("The Workshop" / "L'Atelier"), and removes the three tip IAPs present in rejected build 1. Workshop is the only IAP sold by build 2. It is a non-consumable one-time purchase, never a subscription. It grants unlimited ball rewind (-3 s, -5 s, start of ball) with the table handed back in play, replay of the last five seconds at 1x or 0.5x, and 14 shot drills served from an identical state, each with a success rate and best streak stored on device.
+Build 3 replaces the rejected build 1 of the first App Store version 1.0. It introduces one new feature-unlocking IAP, com.bnjdpn.NovaStationPinball.workshop ("The Workshop" / "L'Atelier"), and removes the three tip IAPs present in rejected build 1. Workshop is the only IAP sold by build 3. It is a non-consumable one-time purchase, never a subscription. It grants unlimited ball rewind (-3 s, -5 s, start of ball), replay of the last five seconds at 1x or 0.5x, and 14 shot drills served from an identical state.
+
+Build 3 also corrects its Game Center leaderboard ID to match the leaderboard submitted here. Gameplay and monetization are unchanged.
 
 WHERE TO FIND IT
 1. Start a game from the home screen and let the ball reach play.
@@ -20,7 +22,7 @@ The complete table, 17 missions, nine clearance promotions, multiball, tilt and 
 LEADERBOARD INTEGRITY
 Any run that used a rewind, a replay or a drill is flagged as assisted and is ranked on a separate local training board; it is never submitted to Game Center. Records created by an earlier installed build are unchanged.
 
-REMOVED IN BUILD 2
-The three consumable tips present in rejected build 1 (tip.cafe, tip.merci, tip.soutien) are gone from the binary; an app that sells a product no longer asks for contributions. They are excluded from this submission. Statements in the build-1 review notes about optional contributions no longer apply.
+REMOVED FROM BUILD 2 ONWARD
+The three consumable tips present in rejected build 1 (tip.cafe, tip.merci, tip.soutien) are gone from builds 2 and 3; an app that sells a product no longer asks for contributions. They are excluded from this submission. Statements in the build-1 review notes about optional contributions no longer apply.
 
 This version contains no advertising, no analytics, no tracking, no developer-operated backend and no app account.

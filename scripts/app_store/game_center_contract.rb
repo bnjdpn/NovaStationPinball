@@ -5,6 +5,7 @@ module NovaStationPinballGameCenterContract
 
   ASC_API_BASE_URL = "https://api.appstoreconnect.apple.com".freeze
   RESOURCE_ID_PATTERN = /\A[A-Za-z0-9-]+\z/
+  VENDOR_ID_PATTERN = /\A[A-Za-z0-9._]{1,100}\z/
   REVIEWABLE_VERSION_STATES = %w[
     PREPARE_FOR_SUBMISSION READY_FOR_REVIEW WAITING_FOR_REVIEW IN_REVIEW
     ACCEPTED PENDING_RELEASE
@@ -33,6 +34,11 @@ module NovaStationPinballGameCenterContract
       %w[id reference_name default_formatter submission_type score_sort_type].each do |key|
         raise Error, "leaderboard definition #{index} has an empty #{key}" if
           definition.fetch(key).to_s.strip.empty?
+      end
+      unless VENDOR_ID_PATTERN.match?(definition.fetch("id"))
+        raise Error,
+              "leaderboard definition #{index} has an invalid id; " \
+              "Apple permits letters, numbers, underscores and periods only"
       end
       %w[score_range_start score_range_end].each do |key|
         value = definition.fetch(key)

@@ -30,7 +30,7 @@ final class GameKitGameCenterClient: GameCenterClient {
     var canPresentAuthentication: Bool { true }
 
     init(
-        leaderboardIDs: [String] = ["nova-station-high-score"],
+        leaderboardIDs: [String] = ["com.bnjdpn.NovaStationPinball.score.high"],
         presenter: @escaping AuthenticationPresenter = GameKitGameCenterClient.presentAuthenticationController
     ) {
         self.leaderboardIDs = leaderboardIDs

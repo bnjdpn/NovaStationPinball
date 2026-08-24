@@ -85,8 +85,9 @@ class ReleaseContractTest < Minitest::Test
     assert_equal "one_time_unlock", release_config.fetch("monetization_strategy").fetch("model")
     assert_equal "https://bnjdpn.github.io/NovaStationPinball/#contact", release_config.fetch("support_url")
     leaderboard = release_config.fetch("leaderboards").fetch(0)
-    assert_equal ["nova-station-high-score"], release_config.fetch("leaderboard_ids")
-    assert_equal "nova-station-high-score", leaderboard.fetch("id")
+    assert_equal ["com.bnjdpn.NovaStationPinball.score.high"],
+                 release_config.fetch("leaderboard_ids")
+    assert_equal "com.bnjdpn.NovaStationPinball.score.high", leaderboard.fetch("id")
     assert_equal "Nova Station High Score", leaderboard.fetch("reference_name")
     assert_equal "INTEGER", leaderboard.fetch("default_formatter")
     assert_equal "BEST_SCORE", leaderboard.fetch("submission_type")

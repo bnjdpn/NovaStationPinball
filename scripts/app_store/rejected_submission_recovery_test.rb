@@ -635,9 +635,9 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
       products_path: File.join(app_root, "fastlane/pro_products.json")
     )
 
-    assert_equal 3_898, source_notes.app_review_note.bytesize
+    assert_equal 3_953, source_notes.app_review_note.bytesize
     assert_operator source_notes.app_review_note.bytesize, :<, 4_000
-    assert_equal "940dc92a915638305980d4d5c411e7ea3a2612ec8bbbe0d25b8a9b971f1af345",
+    assert_equal "15fc5ee015ac226f1cb5e1ae6cee225aa0b9a9a61c379e2f48dcf3526f069ab3",
                  Digest::SHA256.hexdigest(source_notes.app_review_note)
     assert_equal 1_312, source_notes.workshop_review_note.bytesize
     assert_operator source_notes.workshop_review_note.bytesize, :<, 4_000

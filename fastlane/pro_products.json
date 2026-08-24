@@ -4,7 +4,7 @@
   "bundle_id": "com.bnjdpn.NovaStationPinball",
   "base_territory": "FRA",
   "base_currency": "EUR",
-  "notes": "Source de vérité du produit payant de Nova Station Pinball dans App Store Connect. Le produit Workshop existe côté ASC et sa première version doit être attachée au record 1.0 avec le nouveau build 2, puis relue intégralement (un état READY_TO_SUBMIT ne constitue pas une approbation). Limites ASC respectées : display name <= 30 caractères, description <= 45 caractères. Une localisation par locale de la fiche (en-US, fr-FR). Les trois pourboires consommables présents dans le build 1 rejeté (tip.cafe, tip.merci, tip.soutien) doivent être relus à l’état DEVELOPER_REMOVED_FROM_SALE avant la soumission ; le build 2 ne contient plus de tip jar.",
+  "notes": "Source de vérité du produit payant de Nova Station Pinball dans App Store Connect. Le produit Workshop existe côté ASC et sa première version doit être attachée au record 1.0 avec le nouveau build 3, puis relue intégralement (un état READY_TO_SUBMIT ne constitue pas une approbation). Limites ASC respectées : display name <= 30 caractères, description <= 45 caractères. Une localisation par locale de la fiche (en-US, fr-FR). Les trois pourboires consommables présents dans le build 1 rejeté (tip.cafe, tip.merci, tip.soutien) doivent être relus hors vente avant la soumission ; les builds 2 et 3 ne contiennent plus de tip jar.",
   "subscription_group": null,
   "products": [
     {

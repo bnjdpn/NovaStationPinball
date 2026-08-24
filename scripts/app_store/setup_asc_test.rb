@@ -12,9 +12,9 @@ class NovaStationPinballAscSetupTest < Minitest::Test
     "primary_locale" => "en-US",
     "version" => "1.0",
     "locales" => %w[en-US fr-FR],
-    "leaderboard_ids" => ["nova-station-high-score"],
+    "leaderboard_ids" => ["com.bnjdpn.NovaStationPinball.score.high"],
     "leaderboards" => [{
-      "id" => "nova-station-high-score",
+      "id" => "com.bnjdpn.NovaStationPinball.score.high",
       "reference_name" => "Nova Station High Score",
       "default_formatter" => "INTEGER",
       "submission_type" => "BEST_SCORE",
@@ -90,7 +90,7 @@ class NovaStationPinballAscSetupTest < Minitest::Test
         "type" => "gameCenterLeaderboards",
         "id" => "leaderboard-1",
         "attributes" => {
-          "vendorIdentifier" => "nova-station-high-score",
+          "vendorIdentifier" => "com.bnjdpn.NovaStationPinball.score.high",
           "referenceName" => "Nova Station High Score",
           "defaultFormatter" => "INTEGER",
           "submissionType" => "BEST_SCORE",
@@ -302,7 +302,7 @@ class NovaStationPinballAscSetupTest < Minitest::Test
 
     def seed_existing!(drift)
       attributes = {
-        "vendorIdentifier" => "nova-station-high-score",
+        "vendorIdentifier" => "com.bnjdpn.NovaStationPinball.score.high",
         "referenceName" => "Nova Station High Score",
         "defaultFormatter" => "INTEGER",
         "submissionType" => "BEST_SCORE",
@@ -450,7 +450,7 @@ class NovaStationPinballAscSetupTest < Minitest::Test
     )
 
     assert_equal "gameCenterLeaderboards", body.dig(:data, :type)
-    assert_equal "nova-station-high-score",
+    assert_equal "com.bnjdpn.NovaStationPinball.score.high",
                  body.dig(:data, :attributes, :vendorIdentifier)
     assert_equal "0", body.dig(:data, :attributes, :scoreRangeStart)
     assert_equal "999999999", body.dig(:data, :attributes, :scoreRangeEnd)
@@ -588,6 +588,79 @@ class NovaStationPinballAscSetupTest < Minitest::Test
 
       assert_empty client.posts
       refute File.exist?(identity.fetch(:receipt_path))
+    end
+  end
+
+  def test_deterministic_asc_rejection_is_reported_without_get_polling
+    rejection_class = Class.new(StandardError) do
+      attr_reader :status
+
+      def initialize
+        @status = "422"
+        super("invalid leaderboard identifier")
+      end
+    end
+
+    Dir.mktmpdir do |proof_root|
+      proof = NovaStationPinballAscSetup.proof_identity(
+        proof_root: proof_root, key: "leaderboard-create-test",
+        candidate_id: "a" * 64, version: CONFIG.fetch("version"),
+        mutation_guard: -> {}, release_identity: release_identity,
+        payload: { "action" => "test_deterministic_rejection" }
+      )
+      calls = 0
+      error = assert_raises(rejection_class) do
+        NovaStationPinballAscSetup.create_once_and_observe!(
+          proof, -> { flunk "deterministic rejection must not poll" },
+          source_preflight: -> {}
+        ) do
+          calls += 1
+          raise rejection_class.new
+        end
+      end
+
+      assert_equal "422", error.status
+      assert_equal 1, calls
+      assert File.file?(proof.fetch(:intent_path))
+      refute File.exist?(proof.fetch(:receipt_path))
+    end
+  end
+
+  def test_ambiguous_server_error_remains_get_only_across_resume
+    server_error_class = Class.new(StandardError) do
+      attr_reader :status
+
+      def initialize
+        @status = "500"
+        super("temporary server error")
+      end
+    end
+
+    Dir.mktmpdir do |proof_root|
+      proof = NovaStationPinballAscSetup.proof_identity(
+        proof_root: proof_root, key: "leaderboard-server-error-test",
+        candidate_id: "a" * 64, version: CONFIG.fetch("version"),
+        mutation_guard: -> {}, release_identity: release_identity,
+        payload: { "action" => "test_ambiguous_server_error" }
+      )
+      calls = 0
+      confirmation = -> { raise NovaStationPinballAscSetup::SetupError, "readback absent" }
+
+      2.times do
+        error = assert_raises(NovaStationPinballAscSetup::SetupError) do
+          NovaStationPinballAscSetup.create_once_and_observe!(
+            proof, confirmation, source_preflight: -> {}
+          ) do
+            calls += 1
+            raise server_error_class.new
+          end
+        end
+        assert_equal "readback absent", error.message
+      end
+
+      assert_equal 1, calls
+      assert File.file?(proof.fetch(:intent_path))
+      refute File.exist?(proof.fetch(:receipt_path))
     end
   end
 

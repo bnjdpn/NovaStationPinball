@@ -44,8 +44,11 @@ module NovaStationPinballReleaseProvenance
   APP_REVIEW_SOURCE_NOTE = [
     624, "e84d0e43bb941b9967165f84e4f929d64a6b09d1267c73e075b7af51929b215b"
   ].freeze
-  APP_REVIEW_TARGET_NOTE = [
+  APP_REVIEW_RECOVERY_NOTE = [
     3_898, "940dc92a915638305980d4d5c411e7ea3a2612ec8bbbe0d25b8a9b971f1af345"
+  ].freeze
+  APP_REVIEW_TARGET_NOTE = [
+    3_953, "15fc5ee015ac226f1cb5e1ae6cee225aa0b9a9a61c379e2f48dcf3526f069ab3"
   ].freeze
   WORKSHOP_SOURCE_NOTE = [
     931, "fc1240ab71410baa808ff90cf057dd7cc89cd00f45a5ffb6adf852a4c5d4ff6f"
@@ -322,7 +325,9 @@ module NovaStationPinballReleaseProvenance
     ).fetch("data")
     detail_attributes = detail.fetch("attributes")
     allowed_app_notes = [APP_REVIEW_TARGET_NOTE]
-    allowed_app_notes << APP_REVIEW_SOURCE_NOTE if allow_source_notes
+    if allow_source_notes
+      allowed_app_notes.concat([APP_REVIEW_SOURCE_NOTE, APP_REVIEW_RECOVERY_NOTE])
+    end
     contacts_present = %w[
       contactFirstName contactLastName contactPhone contactEmail
     ].all? do |field|

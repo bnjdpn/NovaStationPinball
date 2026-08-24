@@ -30,15 +30,17 @@ class NovaStationPinballReleaseSupportTest < Minitest::Test
     Dir.mktmpdir do |root|
       identity = proof_identity(root, kind: "previews")
       calls = 0
+      original = RuntimeError.new("response lost")
       error = assert_raises(NovaStationPinballReleaseSupport::AmbiguousTransport) do
         NovaStationPinballReleaseSupport.transport_once!(**identity) do
           calls += 1
-          raise "response lost"
+          raise original
         end
       end
       resumed = NovaStationPinballReleaseSupport.transport_once!(**identity) { calls += 1 }
 
       assert_equal "previews", error.kind
+      assert_same original, error.cause
       assert_equal :get_only, resumed
       assert_equal 1, calls
     end

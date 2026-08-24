@@ -83,7 +83,7 @@ class NovaStationPinballGameCenterContractTest < Minitest::Test
         "type" => "gameCenterLeaderboards",
         "id" => "leaderboard-1",
         "attributes" => {
-          "vendorIdentifier" => "nova-station-high-score",
+          "vendorIdentifier" => "com.bnjdpn.NovaStationPinball.score.high",
           "referenceName" => "Nova Station High Score",
           "defaultFormatter" => "INTEGER",
           "submissionType" => "BEST_SCORE",
@@ -166,7 +166,8 @@ class NovaStationPinballGameCenterContractTest < Minitest::Test
   def test_declared_contract_is_exact_and_classic
     definitions = NovaStationPinballGameCenterContract.declared(config)
 
-    assert_equal ["nova-station-high-score"], config.fetch("leaderboard_ids")
+    assert_equal ["com.bnjdpn.NovaStationPinball.score.high"],
+                 config.fetch("leaderboard_ids")
     assert_equal 1, definitions.length
     definition = definitions.first
     assert_equal "Nova Station High Score", definition.fetch("reference_name")
@@ -188,6 +189,17 @@ class NovaStationPinballGameCenterContractTest < Minitest::Test
     )
   end
 
+  def test_declared_contract_rejects_vendor_ids_outside_apples_character_set
+    invalid = Marshal.load(Marshal.dump(config))
+    invalid["leaderboard_ids"] = ["nova-station-high-score"]
+    invalid.fetch("leaderboards").first["id"] = "nova-station-high-score"
+
+    error = assert_raises(NovaStationPinballGameCenterContract::Error) do
+      NovaStationPinballGameCenterContract.declared(invalid)
+    end
+    assert_match(/invalid id/, error.message)
+  end
+
   def test_exact_vendor_version_attributes_and_localizations_resolve
     client = FakeClient.new
 
@@ -197,7 +209,8 @@ class NovaStationPinballGameCenterContractTest < Minitest::Test
 
     assert_equal 1, records.length
     record = records.first
-    assert_equal "nova-station-high-score", record.fetch("vendor_id")
+    assert_equal "com.bnjdpn.NovaStationPinball.score.high",
+                 record.fetch("vendor_id")
     assert_equal "leaderboard-version-1", record.fetch("version_id")
     assert_equal "READY_FOR_REVIEW", record.fetch("state")
     assert_equal %w[en-US fr-FR],

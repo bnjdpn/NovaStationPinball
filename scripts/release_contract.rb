@@ -223,7 +223,7 @@ module NovaStationPinballReleaseContract
 
       maximum_score = Integer(literal.delete("_"), 10)
       expected = [{
-        "id" => "nova-station-high-score",
+        "id" => "com.bnjdpn.NovaStationPinball.score.high",
         "reference_name" => "Nova Station High Score",
         "default_formatter" => "INTEGER",
         "submission_type" => "BEST_SCORE",

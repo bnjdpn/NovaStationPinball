@@ -17,14 +17,15 @@ module NovaStationPinballRejectedSubmissionRecovery
   WORKSHOP_IAP_ID = "6803400833"
   WORKSHOP_PRODUCT_ID = "com.bnjdpn.NovaStationPinball.workshop"
   WORKSHOP_VERSION_ID = "bc22c948-ea0e-4bae-be8f-c78d091dd27b"
-  APP_REVIEW_NOTE_BYTES = 3_898
+  APP_REVIEW_NOTE_BYTES = 3_953
   APP_REVIEW_NOTE_SHA256 =
-    "940dc92a915638305980d4d5c411e7ea3a2612ec8bbbe0d25b8a9b971f1af345"
+    "15fc5ee015ac226f1cb5e1ae6cee225aa0b9a9a61c379e2f48dcf3526f069ab3"
   WORKSHOP_REVIEW_NOTE_BYTES = 1_312
   WORKSHOP_REVIEW_NOTE_SHA256 =
     "58b87d2d341a7061446c5c07d4507d7100605b78e4bbb4a6877ae90aac474db3"
   APP_REVIEW_ALLOWED_NOTE_IDENTITIES = [
     NovaStationPinballReleaseProvenance::APP_REVIEW_SOURCE_NOTE,
+    NovaStationPinballReleaseProvenance::APP_REVIEW_RECOVERY_NOTE,
     NovaStationPinballReleaseProvenance::APP_REVIEW_TARGET_NOTE
   ].freeze
   WORKSHOP_ALLOWED_NOTE_IDENTITIES = [

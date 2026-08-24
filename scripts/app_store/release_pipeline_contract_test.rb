@@ -35,8 +35,9 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     assert_equal "EUR", config.fetch("pricing").fetch("currency")
     refute_empty config.fetch("pricing").fetch("readback_contract")
     leaderboards = NovaStationPinballReviewSubmission.declared_leaderboards(config)
-    assert_equal ["nova-station-high-score"], config.fetch("leaderboard_ids")
-    assert_equal ["nova-station-high-score"],
+    assert_equal ["com.bnjdpn.NovaStationPinball.score.high"],
+                 config.fetch("leaderboard_ids")
+    assert_equal ["com.bnjdpn.NovaStationPinball.score.high"],
                  leaderboards.map { |definition| definition.fetch("id") }
     assert_equal 999_999_999, leaderboards.first.fetch("score_range_end")
 
