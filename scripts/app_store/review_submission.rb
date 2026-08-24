@@ -78,10 +78,12 @@ module NovaStationPinballReviewSubmission
               "#{product_id} is #{actual_type}, expected #{product.fetch('type')}"
       end
       actual_state = item.dig("attributes", "state")
-      unless actual_state == product.fetch("target_state")
+      unless NovaStationPinballRejectedSubmissionRecovery::RetiredIapReadback
+               .not_for_sale_state?(actual_state)
         raise "Retired IAP does not match the release configuration: " \
               "#{product_id} is #{actual_state}, expected " \
-              "#{product.fetch('target_state')}"
+              "#{product.fetch('target_state')} or an unapproved " \
+              "READY_TO_SUBMIT product with no storefront availability"
       end
 
       NovaStationPinballRejectedSubmissionRecovery::RetiredIapReadback.exact!(

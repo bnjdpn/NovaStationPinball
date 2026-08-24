@@ -195,7 +195,8 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
         "available_in_new_territories" => false,
         "territories" => []
       }
-      tip["state"] = Recovery::TARGET_TIP_STATE
+      # ASC keeps an unapproved draft READY_TO_SUBMIT after Remove from Sale.
+      tip["state"] = Recovery::SOURCE_TIP_STATE
       @after_mutation&.call(self, @mutations.length)
       {}
     end
@@ -399,7 +400,7 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
         assert_equal false, tip.fetch("available_in_new_territories")
         assert_equal 0, tip.fetch("available_territory_count")
         assert_equal "CONSUMABLE", tip.fetch("type")
-        assert_equal Recovery::TARGET_TIP_STATE, tip.fetch("state")
+        assert_equal Recovery::SOURCE_TIP_STATE, tip.fetch("state")
       end
 
       app_note = operation_readback(result, "sync-app-review-note")
@@ -432,7 +433,7 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
     end
   end
 
-  def test_public_retired_iap_gate_requires_false_zero_and_exact_parent_state
+  def test_public_retired_iap_gate_accepts_an_inert_unapproved_draft
     client = FakeClient.new
     definition = Recovery::RETIRED_IAPS.first
     client.post("/v1/inAppPurchaseAvailabilities", {
@@ -454,7 +455,7 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
     )
     assert_equal false, readback.fetch("available_in_new_territories")
     assert_equal 0, readback.fetch("available_territory_count")
-    assert_equal Recovery::TARGET_TIP_STATE, readback.fetch("state")
+    assert_equal Recovery::SOURCE_TIP_STATE, readback.fetch("state")
 
     client.tips.fetch(definition.fetch("id"))
           .fetch("availability").fetch("territories") << {

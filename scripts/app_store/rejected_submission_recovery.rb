@@ -61,6 +61,9 @@ module NovaStationPinballRejectedSubmissionRecovery
   SOURCE_TIP_AVAILABLE_IN_NEW_TERRITORIES = true
   SOURCE_TIP_TERRITORY_COUNT = 175
   TARGET_TIP_STATE = "DEVELOPER_REMOVED_FROM_SALE"
+  NOT_FOR_SALE_TIP_STATES = [
+    SOURCE_TIP_STATE, TARGET_TIP_STATE
+  ].freeze
   CANCELABLE_SUBMISSION_STATE = "UNRESOLVED_ISSUES"
   CANCEL_TRANSITION_STATES = %w[CANCELING COMPLETING].freeze
   CANCEL_TERMINAL_STATE = "COMPLETE"
@@ -344,6 +347,10 @@ module NovaStationPinballRejectedSubmissionRecovery
   module RetiredIapReadback
     module_function
 
+    def not_for_sale_state?(state)
+      NOT_FOR_SALE_TIP_STATES.include?(state)
+    end
+
     def snapshot(client:, iap_id:, product_id:)
       purchase = fetch_data!(
         client.get(
@@ -388,7 +395,7 @@ module NovaStationPinballRejectedSubmissionRecovery
         "available_territory_count" => territory_count,
         "exact" => attributes["productId"] == product_id &&
           attributes["inAppPurchaseType"] == "CONSUMABLE" &&
-          state == TARGET_TIP_STATE &&
+          not_for_sale_state?(state) &&
           available_in_new_territories == false && territory_count == 0
       }
     rescue KeyError => error
@@ -401,7 +408,8 @@ module NovaStationPinballRejectedSubmissionRecovery
       )
       unless result.fetch("exact")
         raise Error,
-              "Retired IAP must have exact type, state, availability and territories"
+              "Retired IAP must have an exact type, not-for-sale state, " \
+              "availability and territory set"
       end
       result
     end

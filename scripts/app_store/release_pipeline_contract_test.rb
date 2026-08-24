@@ -487,7 +487,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     ], required
   end
 
-  def test_submission_refuses_until_every_retired_tip_matches_its_target_state
+  def test_submission_requires_every_retired_tip_to_have_zero_availability
     config = JSON.parse(File.binread(CONFIG_PATH))
     retired = NovaStationPinballReviewSubmission.declared_retired_products(config)
     ready = retired.map.with_index do |product, index|
@@ -496,16 +496,6 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
         type: product.fetch("type"), state: "READY_TO_SUBMIT"
       )
     end
-    client = StubClient.new(purchases: ready, versions: {})
-
-    error = assert_raises(RuntimeError) do
-      NovaStationPinballReviewSubmission.validate_retired_products!(
-        client, "app-1", retired
-      )
-    end
-    assert_includes error.message, "READY_TO_SUBMIT"
-    assert_includes error.message, "DEVELOPER_REMOVED_FROM_SALE"
-
     removed = ready.map do |item|
       copy = Marshal.load(Marshal.dump(item))
       copy["attributes"]["state"] = "DEVELOPER_REMOVED_FROM_SALE"
@@ -518,7 +508,16 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
         StubClient.new(purchases: removed, versions: {}), "app-1", retired
       )
     end
-    assert_includes missing_error.message, "exact type, state, availability"
+    assert_includes missing_error.message, "not-for-sale state"
+
+    exact_ready_availabilities = retired_availabilities(ready)
+    NovaStationPinballReviewSubmission.validate_retired_products!(
+      StubClient.new(
+        purchases: ready, versions: {},
+        availabilities: exact_ready_availabilities
+      ),
+      "app-1", retired
+    )
 
     exact_availabilities = retired_availabilities(removed)
     NovaStationPinballReviewSubmission.validate_retired_products!(
@@ -540,7 +539,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
         "app-1", retired
       )
     end
-    assert_includes true_error.message, "availability and territories"
+    assert_includes true_error.message, "availability and territory set"
 
     territory_error = assert_raises(
       NovaStationPinballRejectedSubmissionRecovery::Error
@@ -555,7 +554,7 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
         "app-1", retired
       )
     end
-    assert_includes territory_error.message, "availability and territories"
+    assert_includes territory_error.message, "availability and territory set"
   end
 
   def test_review_item_readback_accepts_exactly_app_leaderboard_or_iap
