@@ -5,8 +5,8 @@ require "bigdecimal"
 require "json"
 require "open3"
 
-# Immutable bridge between the source candidate that produced build 2 and the
-# post-upload ASC tooling allowed to act on that build.  The binary was built
+# Immutable bridge between the source candidate that produced the uploaded
+# build and the post-upload ASC tooling allowed to act on it. The binary was built
 # from +source_head+; a later tooling-only commit must never be represented as
 # the binary's source.
 module NovaStationPinballReleaseProvenance
@@ -102,39 +102,28 @@ module NovaStationPinballReleaseProvenance
   CURRENT = Contract.new(
     app_root: APP_ROOT,
     artifact_root: "Builds/AppStore/NovaStationPinball",
-    run_id: "nova-100-b2-20260824-fresh4",
-    candidate_id: "66892c2b3451ab7583fb4282ebc88eca30a5b522ece05b1546cf0c549c5cc982",
-    candidate_receipt_sha256: "7c483ab270c5fea42f5e3c6eb6750531c10f0fa29c5e3bb544de221ce1970c3e",
-    ipa_upload_intent_sha256: "417f0799a625b5916b48f148010b73c1b11043e1d04c9e6587e27e8bf17e692c",
-    ipa_upload_receipt_sha256: "f2b58cb99f0e0b13df14776df64bdeb0577fd1a8a63c6a88a36c50c8a18dbab7",
-    release_manifest_sha256: "61d6831022efa0cb2fd7fb5e7a8513ab22bb4005ce2215d00e6179851a26c11f",
-    target_build_sha256: "baf5b509835f7f1c7382338e62db79552f34661360a7ceccc48794db483f74ed",
-    source_head: "da7de0815653887f9e932d447b2b4d3846fa8b77",
+    run_id: "nova-100-b3-20260824-gcid1",
+    candidate_id: "cc12d0573343babadbefeded29c51b2d327211fcd8c4ed8ae2e40b42cf7ea81b",
+    candidate_receipt_sha256: "80b9e9f991c0eaf86b23bae4fe93065da45875e23e59273c6b69b155945e6e9e",
+    ipa_upload_intent_sha256: "e62ae26f24084bd7d66cb949a28652dd4b54d2cd332c785ce8d9dd5e21f9eccf",
+    ipa_upload_receipt_sha256: "3339e0fcd827b9f622cf75f3d0a5bdf523931d1b37e1da5075a616b8fdf7f070",
+    release_manifest_sha256: "a3c65ce599f245475600167c715fe1ec4e063fa89a6db05b3d6b4fc557889fc0",
+    target_build_sha256: "5492e818824d484861efb6aed9968735228f249370447714cdf16e0f8db307a3",
+    source_head: "1976f999a762deb43cd3dcad7ad957592eda879e",
     version: "1.0",
-    build: "2",
+    build: "3",
     app_id: "6799920176",
     app_version_id: "1739b449-a776-42ee-8b31-0997496c2a09",
     bundle_id: "com.bnjdpn.NovaStationPinball",
     origin_url: "https://github.com/bnjdpn/NovaStationPinball.git",
-    asc_build_id: "fa72f35e-2ca5-4373-859b-b85a49bb492c",
-    uploaded_date: "2026-08-24T00:29:40-07:00",
-    ipa_sha256: "e4ee09c9fe80b3e4b4855921b64d437d1bda1043f7c33b478d3cac099079f38b",
+    asc_build_id: "44ba6b70-0936-4201-b984-21a5f4752f95",
+    uploaded_date: "2026-08-24T02:54:21-07:00",
+    ipa_sha256: "83a461be1bb78bb1c82dbfbb585d9cfecc4aab77bfc5c7e8611dacbcc3c5eab6",
     workshop_iap_id: "6803400833",
     workshop_product_id: "com.bnjdpn.NovaStationPinball.workshop",
     workshop_version_id: "bc22c948-ea0e-4bae-be8f-c78d091dd27b",
     allowed_tooling_paths: %w[
-      scripts/app_store/rejected_submission_recovery.rb
-      scripts/app_store/rejected_submission_recovery_test.rb
-      scripts/app_store/release_pipeline_contract_test.rb
       scripts/app_store/release_provenance.rb
-      scripts/app_store/release_provenance_test.rb
-      scripts/app_store/review_submission.rb
-      scripts/app_store/select_build.rb
-      scripts/app_store/select_build_test.rb
-      scripts/app_store/setup_asc.rb
-      scripts/app_store/setup_asc_test.rb
-      scripts/app_store/status.rb
-      scripts/app_store/status_test.rb
     ].freeze
   ).freeze
 
@@ -143,14 +132,14 @@ module NovaStationPinballReleaseProvenance
   def verify_release_arguments!(bundle_id:, version:, build: nil, contract: CURRENT)
     unless bundle_id.to_s == contract.bundle_id && version.to_s == contract.version &&
            (build.nil? || build.to_s == contract.build)
-      raise Error, "Requested release resource differs from uploaded build 2"
+      raise Error, "Requested release resource differs from the uploaded build"
     end
     true
   end
 
   def verify_local!(run_id:, candidate_id:, contract: CURRENT)
     unless run_id.to_s == contract.run_id && candidate_id.to_s == contract.candidate_id
-      raise Error, "Release mutation requires the exact uploaded fresh4 candidate"
+      raise Error, "Release mutation requires the exact uploaded candidate"
     end
 
     head = git!(contract, "rev-parse", "HEAD")
@@ -303,7 +292,7 @@ module NovaStationPinballReleaseProvenance
     return :source if actual == SOURCE_SELECTED_BUILD
     return :target if actual == build_identity_for(contract)
 
-    raise Error, "Selected build is neither the audited source nor build 2"
+    raise Error, "Selected build is neither the audited source nor the target build"
   end
 
   # GET-only readiness shared by recovery and the final review mutator. During
