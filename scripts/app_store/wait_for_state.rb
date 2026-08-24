@@ -3,6 +3,7 @@
 
 require "json"
 require "optparse"
+require_relative "review_submission"
 
 module NovaStationPinballStateWaiter
   CONDITIONS = %w[metadata screenshots previews build selected submitted].freeze
@@ -42,12 +43,21 @@ module NovaStationPinballStateWaiter
     required = payload.fetch("required_review_resources", [])
     return false if required.empty?
 
-    payload.fetch("review_submissions", []).any? do |submission|
-      resources = submission.fetch("items", []).map do |item|
-        [item["resource_type"], item["resource_id"]]
-      end
-      states.include?(submission["state"]) && (required - resources).empty?
+    active = payload.fetch("review_submissions", []).reject do |submission|
+      NovaStationPinballReviewSubmission::TERMINAL_STATES.include?(
+        submission["state"]
+      )
     end
+    return false unless active.length == 1
+
+    submission = active.first
+    resources = submission.fetch("items", []).map do |item|
+      [item["resource_type"], item["resource_id"]]
+    end
+    states.include?(submission["state"]) &&
+      NovaStationPinballReviewSubmission.exact_resource_set?(
+        resources, required
+      )
   end
 
   def fail_if_terminal!(payload, condition)

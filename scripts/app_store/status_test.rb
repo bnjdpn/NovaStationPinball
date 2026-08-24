@@ -114,6 +114,23 @@ class NovaStationPinballAscStatusTest < Minitest::Test
 
     payload.fetch("review_submissions").first.fetch("items").delete_at(1)
     refute NovaStationPinballAscStatus.submitted?(payload, "1.0")
+
+    payload.fetch("review_submissions").first["items"] = required.map do |type, id|
+      { "resource_type" => type, "resource_id" => id }
+    end
+    payload.fetch("review_submissions").first.fetch("items") << {
+      "resource_type" => "inAppPurchaseVersions",
+      "resource_id" => "old-tip-version"
+    }
+    refute NovaStationPinballAscStatus.submitted?(payload, "1.0")
+
+    payload.fetch("review_submissions").first["items"] = required.map do |type, id|
+      { "resource_type" => type, "resource_id" => id }
+    end
+    payload.fetch("review_submissions") << {
+      "state" => "READY_FOR_REVIEW", "items" => []
+    }
+    refute NovaStationPinballAscStatus.submitted?(payload, "1.0")
   end
 
   private

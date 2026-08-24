@@ -83,6 +83,27 @@ class NovaStationPinballStateWaiterTest < Minitest::Test
     refute NovaStationPinballStateWaiter.complete?(
       submitted, "submitted", version: "1.0"
     )
+
+    submitted.fetch("review_submissions").first["items"] = resources.map do |type, id|
+      { "resource_type" => type, "resource_id" => id }
+    end
+    submitted.fetch("review_submissions").first.fetch("items") << {
+      "resource_type" => "inAppPurchaseVersions",
+      "resource_id" => "old-tip-version"
+    }
+    refute NovaStationPinballStateWaiter.complete?(
+      submitted, "submitted", version: "1.0"
+    )
+
+    submitted.fetch("review_submissions").first["items"] = resources.map do |type, id|
+      { "resource_type" => type, "resource_id" => id }
+    end
+    submitted.fetch("review_submissions") << {
+      "state" => "READY_FOR_REVIEW", "items" => []
+    }
+    refute NovaStationPinballStateWaiter.complete?(
+      submitted, "submitted", version: "1.0"
+    )
   end
 
   private
