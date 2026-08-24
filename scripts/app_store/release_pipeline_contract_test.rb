@@ -351,6 +351,49 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     end
   end
 
+  class SubmissionClient
+    def initialize(submissions)
+      @submissions = submissions
+    end
+
+    def get_all(path, _query = {})
+      case path
+      when "/v1/apps/app-1/reviewSubmissions"
+        {
+          "data" => @submissions.map do |submission|
+            {
+              "id" => submission.fetch("id"),
+              "type" => "reviewSubmissions",
+              "attributes" => { "state" => submission.fetch("state") }
+            }
+          end
+        }
+      when %r{\A/v1/reviewSubmissions/([^/]+)/items\z}
+        submission = @submissions.find do |candidate|
+          candidate.fetch("id") == Regexp.last_match(1)
+        end
+        raise "missing submission" unless submission
+
+        {
+          "data" => submission.fetch("resources").map.with_index do |resource, index|
+            type, id = resource
+            relationship =
+              NovaStationPinballReviewSubmission.review_item_relationship(type)
+            {
+              "id" => "#{submission.fetch('id')}-item-#{index}",
+              "type" => "reviewSubmissionItems",
+              "relationships" => {
+                relationship => { "data" => { "type" => type, "id" => id } }
+              }
+            }
+          end
+        }
+      else
+        raise "unexpected request: #{path}"
+      end
+    end
+  end
+
   def purchase(id:, product_id:, type:, state:)
     {
       "id" => id, "type" => "inAppPurchases",
@@ -534,6 +577,81 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
     }
     assert_raises(RuntimeError) do
       NovaStationPinballReviewSubmission.review_item_resource!(ambiguous)
+    end
+  end
+
+  def test_submission_readback_requires_one_exact_resource_set
+    required = [
+      ["appStoreVersions", "v-1"],
+      ["gameCenterLeaderboardVersions", "gcv-1"],
+      ["inAppPurchaseVersions", "iapv-1"]
+    ]
+    exact = {
+      "id" => "review-1", "state" => "WAITING_FOR_REVIEW",
+      "resources" => required.reverse
+    }
+    assert NovaStationPinballReviewSubmission.review_submitted?(
+      SubmissionClient.new([exact]), "app-1", required
+    )
+
+    subset = Marshal.load(Marshal.dump(exact))
+    subset["resources"] = required.first(2)
+    refute NovaStationPinballReviewSubmission.review_submitted?(
+      SubmissionClient.new([subset]), "app-1", required
+    )
+
+    superset = Marshal.load(Marshal.dump(exact))
+    superset["resources"] += [["inAppPurchaseVersions", "old-tip-version"]]
+    refute NovaStationPinballReviewSubmission.review_submitted?(
+      SubmissionClient.new([superset]), "app-1", required
+    )
+    assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.resumable_draft!(
+        [{
+          "id" => "draft-extra", "state" => "READY_FOR_REVIEW",
+          "resources" => superset.fetch("resources")
+        }],
+        required
+      )
+    end
+
+    duplicate = Marshal.load(Marshal.dump(exact))
+    duplicate["resources"] << required.first
+    refute NovaStationPinballReviewSubmission.review_submitted?(
+      SubmissionClient.new([duplicate]), "app-1", required
+    )
+    assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.exact_submission_resources!(
+        SubmissionClient.new([duplicate]), "review-1", required
+      )
+    end
+
+    second = Marshal.load(Marshal.dump(exact)).merge("id" => "review-2")
+    assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.review_submitted?(
+        SubmissionClient.new([exact, second]), "app-1", required
+      )
+    end
+  end
+
+  def test_only_one_subset_draft_can_be_resumed
+    required = [
+      ["appStoreVersions", "v-1"],
+      ["gameCenterLeaderboardVersions", "gcv-1"],
+      ["inAppPurchaseVersions", "iapv-1"]
+    ]
+    draft = {
+      "id" => "draft-1", "state" => "READY_FOR_REVIEW",
+      "resources" => [["appStoreVersions", "v-1"]]
+    }
+    assert_equal draft,
+                 NovaStationPinballReviewSubmission.resumable_draft!(
+                   [draft], required
+                 )
+    assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.resumable_draft!(
+        [draft, draft.merge("id" => "draft-2")], required
+      )
     end
   end
 

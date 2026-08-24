@@ -23,6 +23,9 @@ module NovaStationPinballReviewSubmission
   # Connect requires its version to ride inside the same review submission as
   # the app version. That is exactly the case of a first paid product.
   SHIPPED_PRODUCT_STATE = "APPROVED"
+  REVIEW_RESOURCE_TYPES = %w[
+    appStoreVersions gameCenterLeaderboardVersions inAppPurchaseVersions
+  ].freeze
 
   module_function
 
@@ -151,7 +154,7 @@ module NovaStationPinballReviewSubmission
 
   # The exact resources this app version has to be submitted with.
   def required_resources(app_version_id, product_records, leaderboard_records = [])
-    [["appStoreVersions", app_version_id]] +
+    resources = [["appStoreVersions", app_version_id]] +
       leaderboard_records.map do |record|
         ["gameCenterLeaderboardVersions", record.fetch("version_id")]
       end +
@@ -159,6 +162,44 @@ module NovaStationPinballReviewSubmission
                      .map do |record|
         ["inAppPurchaseVersions", record.fetch("version_id")]
       end
+    canonical_required_resources!(resources)
+  end
+
+  def canonical_required_resources!(resources)
+    unless resources.instance_of?(Array) && !resources.empty? &&
+           resources.all? do |resource|
+             resource.instance_of?(Array) && resource.length == 2 &&
+               REVIEW_RESOURCE_TYPES.include?(resource.fetch(0)) &&
+               resource.fetch(1).instance_of?(String) &&
+               !resource.fetch(1).empty?
+           end
+      raise "Required review resources have an invalid shape"
+    end
+    if resources.uniq.length != resources.length
+      raise "Required review resources contain a duplicate"
+    end
+
+    resources.sort
+  end
+
+  def exact_resource_set?(actual, required)
+    expected = canonical_required_resources!(required)
+    actual.instance_of?(Array) && actual.uniq.length == actual.length &&
+      actual.sort == expected
+  end
+
+  def draft_resource_subset?(actual, required)
+    expected = canonical_required_resources!(required)
+    actual.instance_of?(Array) && actual.uniq.length == actual.length &&
+      (actual - expected).empty?
+  end
+
+  def exact_submission_resources!(client, submission_id, required)
+    actual = resources(client, submission_id)
+    return actual if exact_resource_set?(actual, required)
+
+    raise "Review submission resources differ from the exact release set: " \
+          "#{submission_id}"
   end
 
   def resources(client, submission_id)
@@ -218,10 +259,37 @@ module NovaStationPinballReviewSubmission
   end
 
   def review_submitted?(client, app_id, required_resources)
-    submissions(client, app_id).any? do |submission|
-      SUBMITTED_STATES.include?(submission.fetch("state")) &&
-        (required_resources - submission.fetch("resources")).empty?
+    active = submissions(client, app_id).reject do |submission|
+      TERMINAL_STATES.include?(submission.fetch("state"))
     end
+    matches = active.select do |submission|
+      SUBMITTED_STATES.include?(submission.fetch("state")) &&
+        exact_resource_set?(submission.fetch("resources"), required_resources)
+    end
+    return false if matches.empty?
+    unless matches.length == 1 && active.length == 1
+      raise "Active submitted review state is ambiguous"
+    end
+
+    true
+  end
+
+  def resumable_draft!(active, required_resources)
+    unsafe = active.reject do |submission|
+      submission.fetch("state") == "READY_FOR_REVIEW" &&
+        draft_resource_subset?(
+          submission.fetch("resources"), required_resources
+        )
+    end
+    unless unsafe.empty?
+      raise "An active review submission cannot be changed safely: " \
+            "#{unsafe.map { |item| "#{item['id']}:#{item['state']}" }.join(',')}"
+    end
+    if active.length > 1
+      raise "Multiple active review drafts cannot be resumed safely"
+    end
+
+    active.first
   end
 
   def wait_until(timeout:, interval:)
@@ -354,15 +422,9 @@ if $PROGRAM_NAME == __FILE__
         submission.fetch("state")
       )
     end
-    unsafe = active.reject do |submission|
-      submission.fetch("state") == "READY_FOR_REVIEW" &&
-        (submission.fetch("resources") - required).empty?
-    end
-    unless unsafe.empty?
-      raise "An active review submission cannot be changed safely: " \
-            "#{unsafe.map { |item| "#{item['id']}:#{item['state']}" }.join(',')}"
-    end
-    submission = active.first
+    submission = NovaStationPinballReviewSubmission.resumable_draft!(
+      active, required
+    )
     unless submission
       proof = {
         intent_path: File.join(logs, "review-create-intent.json"),
@@ -431,6 +493,11 @@ if $PROGRAM_NAME == __FILE__
       NovaStationPinballReleaseSupport.mark_observed!(**proof)
     end
 
+    exact_resources =
+      NovaStationPinballReviewSubmission.exact_submission_resources!(
+        client, submission.fetch("id"), required
+      )
+
     submit_proof = {
       intent_path: File.join(logs, "review-submit-intent.json"),
       receipt_path: File.join(logs, "review-submit-receipt.json"),
@@ -438,7 +505,7 @@ if $PROGRAM_NAME == __FILE__
       version: version_string,
       payload: {
         "action" => "submit", "submission_id" => submission.fetch("id"),
-        "resources" => required.sort
+        "resources" => exact_resources.sort
       }
     }
     NovaStationPinballReviewSubmission.guarded_mutation(submit_proof) do
