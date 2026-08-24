@@ -123,7 +123,9 @@ module NovaStationPinballReleaseProvenance
     workshop_product_id: "com.bnjdpn.NovaStationPinball.workshop",
     workshop_version_id: "bc22c948-ea0e-4bae-be8f-c78d091dd27b",
     allowed_tooling_paths: %w[
+      scripts/app_store/release_pipeline_contract_test.rb
       scripts/app_store/release_provenance.rb
+      scripts/app_store/review_submission.rb
     ].freeze
   ).freeze
 

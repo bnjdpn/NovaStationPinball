@@ -300,10 +300,14 @@ module NovaStationPinballReviewSubmission
 
   def resumable_draft!(active, required_resources)
     unsafe = active.reject do |submission|
+      resources = submission.fetch("resources")
+      platform = submission.fetch("platform")
+      platform_ready = platform == "IOS" ||
+        (platform.nil? && resources.empty?)
       submission.fetch("state") == "READY_FOR_REVIEW" &&
-        submission.fetch("platform") == "IOS" &&
+        platform_ready &&
         draft_resource_subset?(
-          submission.fetch("resources"), required_resources
+          resources, required_resources
         )
     end
     unless unsafe.empty?
@@ -579,16 +583,21 @@ if $PROGRAM_NAME == __FILE__
       true
     end
 
-    unless submission
-      proof = {
-        intent_path: File.join(logs, "review-create-intent.json"),
-        receipt_path: File.join(logs, "review-create-receipt.json"),
-        kind: "submit_review", candidate_id: candidate_id,
-        version: version_string,
-        payload: proof_release.merge(
-          "action" => "create", "app_id" => app.fetch("id")
-        )
-      }
+    create_proof = {
+      intent_path: File.join(logs, "review-create-intent.json"),
+      receipt_path: File.join(logs, "review-create-receipt.json"),
+      kind: "submit_review", candidate_id: candidate_id,
+      version: version_string,
+      payload: proof_release.merge(
+        "action" => "create", "app_id" => app.fetch("id")
+      )
+    }
+    if submission
+      if File.exist?(create_proof.fetch(:intent_path)) ||
+         File.symlink?(create_proof.fetch(:intent_path))
+        NovaStationPinballReleaseSupport.mark_observed!(**create_proof)
+      end
+    else
       create_preflight = lambda do
         release_resources_guard.call
         active_now = NovaStationPinballReviewSubmission.submissions(
@@ -601,7 +610,7 @@ if $PROGRAM_NAME == __FILE__
         raise "An active review submission appeared before creation" unless active_now.empty?
       end
       NovaStationPinballReviewSubmission.guarded_mutation(
-        proof, preflight: create_preflight
+        create_proof, preflight: create_preflight
       ) do
         client.post("/v1/reviewSubmissions", {
           data: {
@@ -624,7 +633,7 @@ if $PROGRAM_NAME == __FILE__
         end
         NovaStationPinballReviewSubmission.resumable_draft!(candidates, required)
       end
-      NovaStationPinballReleaseSupport.mark_observed!(**proof)
+      NovaStationPinballReleaseSupport.mark_observed!(**create_proof)
     end
     allowed_active_submission_ids = [submission.fetch("id")]
 

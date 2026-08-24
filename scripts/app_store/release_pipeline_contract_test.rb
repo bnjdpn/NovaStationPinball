@@ -673,6 +673,16 @@ class NovaStationPinballReleasePipelineContractTest < Minitest::Test
                  NovaStationPinballReviewSubmission.resumable_draft!(
                    [draft], required
                  )
+    empty_platform_draft = draft.merge("platform" => nil, "resources" => [])
+    assert_equal empty_platform_draft,
+                 NovaStationPinballReviewSubmission.resumable_draft!(
+                   [empty_platform_draft], required
+                 )
+    assert_raises(RuntimeError) do
+      NovaStationPinballReviewSubmission.resumable_draft!(
+        [draft.merge("platform" => nil)], required
+      )
+    end
     assert_raises(RuntimeError) do
       NovaStationPinballReviewSubmission.resumable_draft!(
         [draft, draft.merge("id" => "draft-2")], required
