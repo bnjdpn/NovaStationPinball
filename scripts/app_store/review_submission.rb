@@ -302,8 +302,7 @@ module NovaStationPinballReviewSubmission
     unsafe = active.reject do |submission|
       resources = submission.fetch("resources")
       platform = submission.fetch("platform")
-      platform_ready = platform == "IOS" ||
-        (platform.nil? && resources.empty?)
+      platform_ready = platform.nil? || platform == "IOS"
       submission.fetch("state") == "READY_FOR_REVIEW" &&
         platform_ready &&
         draft_resource_subset?(
