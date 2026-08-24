@@ -19,10 +19,20 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
       @mutations = []
       @submission_state = Recovery::CANCELABLE_SUBMISSION_STATE
       @tips = Recovery::RETIRED_IAPS.each_with_object({}) do |definition, result|
+        iap_id = definition.fetch("id")
         result[definition.fetch("id")] = {
           "product_id" => definition.fetch("product_id"),
           "state" => Recovery::SOURCE_TIP_STATE,
-          "availability" => nil
+          "availability" => {
+            "id" => iap_id,
+            "available_in_new_territories" =>
+              Recovery::SOURCE_TIP_AVAILABLE_IN_NEW_TERRITORIES,
+            "territories" => Array.new(
+              Recovery::SOURCE_TIP_TERRITORY_COUNT
+            ) do |index|
+              { "type" => "territories", "id" => "T#{index}" }
+            end
+          }
         }
       end
       @app_review_note = "outdated App Review note"
@@ -46,7 +56,7 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
       @tips.each do |iap_id, tip|
         tip["state"] = Recovery::TARGET_TIP_STATE
         tip["availability"] = {
-          "id" => "availability-#{iap_id}",
+          "id" => iap_id,
           "available_in_new_territories" => false,
           "territories" => []
         }
@@ -179,7 +189,7 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
       )
       tip = @tips.fetch(iap_id)
       tip["availability"] = {
-        "id" => "availability-#{iap_id}",
+        "id" => iap_id,
         "available_in_new_territories" => false,
         "territories" => []
       }
@@ -449,6 +459,39 @@ class NovaStationPinballRejectedSubmissionRecoveryTest < Minitest::Test
         product_id: definition.fetch("product_id")
       )
     end
+  end
+
+  def test_tip_post_requires_the_exact_existing_full_storefront_source
+    client = FakeClient.new
+    operation = coordinator(client: client).operations.fetch(1)
+    snapshot = operation.snapshot
+
+    assert_equal Recovery::SOURCE_TIP_STATE, snapshot.fetch("state")
+    assert_equal snapshot.fetch("iap_id"), snapshot.fetch("availability_id")
+    assert_equal true, snapshot.fetch("available_in_new_territories")
+    assert_equal 175, snapshot.fetch("available_territory_count")
+    assert_equal :mutate, operation.preflight(snapshot)
+    assert_equal snapshot, operation.observe(snapshot)
+
+    tip = client.tips.fetch(snapshot.fetch("iap_id"))
+    original = Marshal.load(Marshal.dump(tip.fetch("availability")))
+    tip["availability"] = nil
+    assert_raises(Recovery::Error) do
+      operation.preflight(operation.snapshot)
+    end
+
+    tip["availability"] = Marshal.load(Marshal.dump(original))
+    tip.fetch("availability").fetch("territories").pop
+    assert_raises(Recovery::Error) do
+      operation.preflight(operation.snapshot)
+    end
+
+    tip["availability"] = Marshal.load(Marshal.dump(original))
+    tip.fetch("availability")["available_in_new_territories"] = false
+    assert_raises(Recovery::Error) do
+      operation.preflight(operation.snapshot)
+    end
+    assert_equal [], client.mutations
   end
 
   def test_workshop_version_number_is_strictly_one

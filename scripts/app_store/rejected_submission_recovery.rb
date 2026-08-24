@@ -49,6 +49,8 @@ module NovaStationPinballRejectedSubmissionRecovery
   ].freeze
 
   SOURCE_TIP_STATE = "READY_TO_SUBMIT"
+  SOURCE_TIP_AVAILABLE_IN_NEW_TERRITORIES = true
+  SOURCE_TIP_TERRITORY_COUNT = 175
   TARGET_TIP_STATE = "DEVELOPER_REMOVED_FROM_SALE"
   CANCELABLE_SUBMISSION_STATE = "UNRESOLVED_ISSUES"
   CANCEL_TRANSITION_STATES = %w[CANCELING COMPLETING].freeze
@@ -857,9 +859,9 @@ module NovaStationPinballRejectedSubmissionRecovery
 
     def retired_iap_preflight(snapshot)
       retired_iap_identity!(snapshot)
-      unless snapshot.fetch("state") == SOURCE_TIP_STATE &&
-             snapshot.fetch("availability_id").nil?
-        raise Error, "Retired IAP is not safe for the one-shot availability POST"
+      unless retired_iap_source_exact?(snapshot)
+        raise Error,
+              "Retired IAP does not match the exact live source availability"
       end
 
       :mutate
@@ -867,19 +869,30 @@ module NovaStationPinballRejectedSubmissionRecovery
 
     def retired_iap_observer(snapshot)
       retired_iap_identity!(snapshot)
-      unless [SOURCE_TIP_STATE, TARGET_TIP_STATE].include?(snapshot.fetch("state"))
-        raise Error, "Retired IAP entered an unexpected state"
-      end
-      if snapshot.fetch("availability_id")
-        unless snapshot.fetch("available_in_new_territories") == false &&
-               snapshot.fetch("available_territory_count") == 0
-          raise Error, "Retired IAP availability differs from the exact target"
-        end
-      elsif snapshot.fetch("state") != SOURCE_TIP_STATE
-        raise Error, "Retired IAP state and availability are inconsistent"
+      target_availability =
+        snapshot.fetch("availability_id") == snapshot.fetch("iap_id") &&
+        snapshot.fetch("available_in_new_territories") == false &&
+        snapshot.fetch("available_territory_count") == 0
+      transition_to_target =
+        snapshot.fetch("state") == SOURCE_TIP_STATE && target_availability
+      target_exact =
+        snapshot.fetch("state") == TARGET_TIP_STATE && target_availability
+      unless retired_iap_source_exact?(snapshot) ||
+             transition_to_target || target_exact
+        raise Error,
+              "Retired IAP differs from the exact source/target transition"
       end
 
       snapshot
+    end
+
+    def retired_iap_source_exact?(snapshot)
+      snapshot.fetch("state") == SOURCE_TIP_STATE &&
+        snapshot.fetch("availability_id") == snapshot.fetch("iap_id") &&
+        snapshot.fetch("available_in_new_territories") ==
+          SOURCE_TIP_AVAILABLE_IN_NEW_TERRITORIES &&
+        snapshot.fetch("available_territory_count") ==
+          SOURCE_TIP_TERRITORY_COUNT
     end
 
     def app_review_note_snapshot(expected_note)
