@@ -1,0 +1,22 @@
+name: Public site release review
+
+on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - '.github/workflows/site-release-review.yml'
+      - 'marketing/**'
+      - 'scripts/marketing_site.rb'
+      - 'scripts/marketing_seo*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-caller-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    uses: bnjdpn/Studio/.github/workflows/site-review.yml@2ec65c519ff2091f0599ff29d0977631f2018d46

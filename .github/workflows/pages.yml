@@ -1,16 +1,6 @@
 name: Deploy marketing site
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "marketing/**"
-      - "scripts/marketing_site.rb"
-      - "scripts/marketing_seo.rb"
-      - "fastlane/metadata/**"
-      - "NovaStationPinball/Resources/Assets.xcassets/AppIcon.appiconset/**"
-      - "site/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -20,11 +10,12 @@ permissions:
 
 concurrency:
   group: marketing-pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    if: ${{ vars.STUDIO_ISOLATED_MAC_ENABLED == 'true' }}
+    runs-on: [self-hosted, macOS, studio-isolated]
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -47,7 +38,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    if: ${{ vars.STUDIO_ISOLATED_MAC_ENABLED == 'true' }}
+    runs-on: [self-hosted, macOS, studio-isolated]
     needs: build
     steps:
       - name: Deploy Pages artifact
