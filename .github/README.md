@@ -14,3 +14,10 @@ Run `bin/studio-site-review /path/to/this/checkout` from a checkout of Studio
 on the Mac to execute the same read-only generation and SEO checks locally.
 No page content, availability claim, app code, or store metadata changes here.
 This PR does not deploy the site.
+
+This repository is public and Studio is private. GitHub does not allow a
+public caller to use a private reusable workflow, even after widening the
+private repository access policy. Do not merge this prepared call until the
+CEO chooses a compatible location or a local-only review contract.
+No visibility change or public workflow publication is authorized here.
+See https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations.
