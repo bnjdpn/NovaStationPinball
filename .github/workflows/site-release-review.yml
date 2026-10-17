@@ -19,4 +19,4 @@ concurrency:
 
 jobs:
   review:
-    uses: bnjdpn/Studio/.github/workflows/site-review.yml@2ec65c519ff2091f0599ff29d0977631f2018d46
+    uses: bnjdpn/Studio/.github/workflows/site-review.yml@a8f9022b05f190cc3b692311d13526ad82b7fe68
